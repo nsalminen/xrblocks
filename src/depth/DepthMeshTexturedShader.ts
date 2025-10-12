@@ -21,6 +21,7 @@ void main() {
 
 uniform vec3 uColor;
 uniform sampler2D uDepthTexture;
+uniform sampler2DArray uDepthTextureArray;
 uniform vec3 uLightDirection;
 uniform vec2 uResolution;
 uniform float uRawValueToMeters;
@@ -36,6 +37,7 @@ uniform float uMaxDepth;
 uniform float uDebug;
 uniform float uOpacity;
 uniform bool uUsingFloatDepth;
+uniform bool uIsTextureArray;
 
 float saturate(in float x) {
   return clamp(x, 0.0, 1.0);
@@ -68,6 +70,10 @@ float DepthGetMeters(in sampler2D depth_texture, in vec2 depth_uv) {
   }
   vec2 packedDepthAndVisibility = texture2D(depth_texture, depth_uv).rg;
   return dot(packedDepthAndVisibility, vec2(255.0, 256.0 * 255.0)) * uRawValueToMeters;
+}
+
+float DepthArrayGetMeters(in sampler2DArray depth_texture, in vec2 depth_uv) {
+  return uRawValueToMeters * texture(uDepthTextureArray, vec3 (depth_uv.x, depth_uv.y, 0)).r;
 }
 
 vec3 DepthGetColorVisualization(in float x) {
@@ -105,7 +111,7 @@ void main() {
   vec2 depth_uv = uv;
   depth_uv.y = 1.0 - depth_uv.y;
 
-  float depth = DepthGetMeters(uDepthTexture, depth_uv) * 8.0;
+  float depth = (uIsTextureArray ? DepthArrayGetMeters(uDepthTextureArray, depth_uv) : DepthGetMeters(uDepthTexture, depth_uv)) * 8.0;
   float normalized_depth =
     saturate((depth - uMinDepth) / (uMaxDepth - uMinDepth));
   gl_FragColor = uOpacity * vec4(TurboColormap(normalized_depth), 1.0);

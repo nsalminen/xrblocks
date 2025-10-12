@@ -48,6 +48,9 @@ export class OcclusionPass extends Pass {
 
     this.occlusionMapUniforms = {
       uDepthTexture: {value: null},
+      uDepthTextureArray: {value: null},
+      uViewId: {value: 0.0},
+      uIsTextureArray: {value: 0.0},
       uUvTransform: {value: new THREE.Matrix4()},
       uRawValueToMeters: {value: 8.0 / 65536.0},
       uAlpha: {value: 0.75},
@@ -158,8 +161,14 @@ export class OcclusionPass extends Pass {
       renderer: THREE.WebGLRenderer, dimensions: THREE.Vector2,
       view_id: number) {
     // Compute our own read buffer.
-    this.occlusionMeshMaterial.uniforms.uDepthTexture.value =
-        this.depthTextures[view_id];
+    const texture = this.depthTextures[view_id];
+    const isTextureArray = texture instanceof THREE.ExternalTexture;
+    this.occlusionMeshMaterial.uniforms.uIsTextureArray.value = isTextureArray?1.0:0;
+    this.occlusionMeshMaterial.uniforms.uViewId.value = view_id;
+    if (isTextureArray)
+      this.occlusionMeshMaterial.uniforms.uDepthTextureArray.value = texture;
+    else
+      this.occlusionMeshMaterial.uniforms.uDepthTexture.value = texture;
     this.scene.overrideMaterial = this.occlusionMeshMaterial;
     renderer.getDrawingBufferSize(dimensions);
     this.occlusionMapTexture.setSize(dimensions.x, dimensions.y);
@@ -185,7 +194,14 @@ export class OcclusionPass extends Pass {
     // Render depth into texture
     this.occlusionMapUniforms.tDiffuse.value = readBuffer.texture;
     this.occlusionMapUniforms.tDepth.value = readBuffer.depthTexture;
-    this.occlusionMapUniforms.uDepthTexture.value = this.depthTextures[view_id];
+    const texture = this.depthTextures[view_id];
+    const isTextureArray = texture instanceof THREE.ExternalTexture;
+    this.occlusionMeshMaterial.uniforms.uIsTextureArray.value = isTextureArray?1.0:0;
+    this.occlusionMeshMaterial.uniforms.uViewId.value = view_id;
+    if (isTextureArray)
+      this.occlusionMeshMaterial.uniforms.uDepthTextureArray.value = texture;
+    else
+      this.occlusionMeshMaterial.uniforms.uDepthTexture.value = texture;
 
     // First render the occlusion map to an intermediate buffer.
     renderer.getDrawingBufferSize(dimensions);

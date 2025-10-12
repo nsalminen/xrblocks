@@ -5,38 +5,39 @@ import {DepthOptions} from './DepthOptions';
 export class DepthTextures {
   private uint16Arrays: Uint16Array[] = [];
   private uint8Arrays: Uint8Array[] = [];
-  private textures: THREE.DataTexture[] = [];
+  private dataTextures: THREE.DataTexture[] = [];
+  private nativeTextures: THREE.ExternalTexture[] = [];
   public depthData: XRCPUDepthInformation[] = [];
 
   constructor(private options: DepthOptions) {}
 
-  private createDepthTextures(
+  private createDataDepthTextures(
       depthData: XRCPUDepthInformation, view_id: number) {
-    if (this.textures[view_id]) {
-      this.textures[view_id].dispose();
+    if (this.dataTextures[view_id]) {
+      this.dataTextures[view_id].dispose();
     }
     if (this.options.useFloat32) {
       const typedArray = new Uint16Array(depthData.width * depthData.height);
       const format = THREE.RedFormat;
       const type = THREE.HalfFloatType;
       this.uint16Arrays[view_id] = typedArray;
-      this.textures[view_id] = new THREE.DataTexture(
+      this.dataTextures[view_id] = new THREE.DataTexture(
           typedArray, depthData.width, depthData.height, format, type);
     } else {
       const typedArray = new Uint8Array(depthData.width * depthData.height * 2);
       const format = THREE.RGFormat;
       const type = THREE.UnsignedByteType;
       this.uint8Arrays[view_id] = typedArray;
-      this.textures[view_id] = new THREE.DataTexture(
+      this.dataTextures[view_id] = new THREE.DataTexture(
           typedArray, depthData.width, depthData.height, format, type);
     }
   }
 
-  update(depthData: XRCPUDepthInformation, view_id: number) {
-    if (this.textures.length < view_id + 1 ||
-        this.textures[view_id].image.width !== depthData.width ||
-        this.textures[view_id].image.height !== depthData.height) {
-      this.createDepthTextures(depthData, view_id);
+  updateData(depthData: XRCPUDepthInformation, view_id: number) {
+    if (this.dataTextures.length < view_id + 1 ||
+        this.dataTextures[view_id].image.width !== depthData.width ||
+        this.dataTextures[view_id].image.height !== depthData.height) {
+      this.createDataDepthTextures(depthData, view_id);
     }
     if (this.options.useFloat32) {
       const float32Data = new Float32Array(depthData.data);
@@ -48,11 +49,27 @@ export class DepthTextures {
     } else {
       this.uint8Arrays[view_id].set(new Uint8Array(depthData.data));
     }
-    this.textures[view_id].needsUpdate = true;
+    this.dataTextures[view_id].needsUpdate = true;
     this.depthData[view_id] = depthData;
   }
 
+  updateNativeTexture(depthData: XRWebGLDepthInformation, renderer: THREE.WebGLRenderer, view_id: number) {
+    if (this.dataTextures.length < view_id + 1) {
+      this.nativeTextures[view_id] = new THREE.ExternalTexture(depthData.texture);
+    } else {
+      this.nativeTextures[view_id].sourceTexture = depthData.texture;
+    }
+    // fixed in newer revision of three
+    const textureProperties = renderer.properties.get(this.nativeTextures[view_id]) as any;
+    textureProperties.__webglTexture = depthData.texture;
+    textureProperties.__version = 1;
+  }
+
   get(view_id: number) {
-    return this.textures[view_id];
+    if (this.dataTextures.length > 0) {
+      return this.dataTextures[view_id];
+    }
+
+    return this.nativeTextures[view_id];
   }
 };

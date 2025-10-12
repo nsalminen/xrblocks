@@ -7,6 +7,7 @@ import {clamp} from '../utils/utils';
 import {DepthMeshTexturedShader} from './DepthMeshTexturedShader';
 import {DepthMeshOptions, DepthOptions} from './DepthOptions';
 import {DepthTextures} from './DepthTextures';
+import { instance } from 'three/src/nodes/TSL.js';
 
 export class DepthMesh extends MeshScript {
   static dependencies = {
@@ -38,6 +39,12 @@ export class DepthMesh extends MeshScript {
   private options: DepthMeshOptions;
   private depthTextureMaterialUniforms?;
 
+  private depthTarget!: THREE.WebGLRenderTarget;
+  private depthTexture!: THREE.ExternalTexture;
+  private depthScene!: THREE.Scene;
+  private depthCamera!: THREE.OrthographicCamera;
+  private gpuPixels!: Float32Array;
+
   private RAPIER?: typeof RAPIER_NS;
   private blendedWorld?: RAPIER_NS.World;
   private rigidBody?: RAPIER_NS.RigidBody;
@@ -53,6 +60,8 @@ export class DepthMesh extends MeshScript {
     if (options.useDepthTexture || options.showDebugTexture) {
       uniforms = {
         uDepthTexture: {value: (null as THREE.Texture | null)},
+        uDepthTextureArray: {value: (null as THREE.Texture | null)},
+        uIsTextureArray: {value: 0.0},
         uColor: {value: new THREE.Color(0xaaaaaa)},
         uResolution: {value: new THREE.Vector2(width, height)},
         uRawValueToMeters: {value: 1.0},
@@ -134,11 +143,16 @@ export class DepthMesh extends MeshScript {
 
     const depthTextureLeft = this.depthTextures?.get(0);
     if (depthTextureLeft && this.depthTextureMaterialUniforms) {
-      this.depthTextureMaterialUniforms.uDepthTexture.value = depthTextureLeft;
+      const isTextureArray = depthTextureLeft instanceof THREE.ExternalTexture;
+      this.depthTextureMaterialUniforms.uIsTextureArray.value = isTextureArray?1.0:0;
+      if (isTextureArray)
+        this.depthTextureMaterialUniforms.uDepthTextureArray.value = depthTextureLeft;
+      else
+        this.depthTextureMaterialUniforms.uDepthTexture.value = depthTextureLeft;
       this.depthTextureMaterialUniforms.uMinDepth.value = this.minDepth;
       this.depthTextureMaterialUniforms.uMaxDepth.value = this.maxDepth;
       this.depthTextureMaterialUniforms.uRawValueToMeters.value =
-          this.depthTextures!.depthData[0].rawValueToMeters;
+          this.depthTextures!.depthData.length?this.depthTextures!.depthData[0].rawValueToMeters:1.0;
       (this.material as THREE.Material).needsUpdate = true;
     }
 
@@ -147,6 +161,76 @@ export class DepthMesh extends MeshScript {
     }
 
     this.updateColliderIfNeeded();
+  }
+
+  updateGPUDepth(depthData: XRWebGLDepthInformation) {
+    this.updateDepth(this.convertGPUToGPU(depthData));
+  }
+
+  convertGPUToGPU(depthData: XRWebGLDepthInformation) {
+    if (!this.depthTarget) {
+      this.depthTarget = new THREE.WebGLRenderTarget(depthData.width, depthData.height,{
+                  format: THREE.RedFormat,
+                  type: THREE.FloatType,
+                  internalFormat: 'R32F',
+                  minFilter: THREE.NearestFilter,
+                  magFilter: THREE.NearestFilter,
+                  depthBuffer: false
+                });
+      this.depthTexture = new THREE.ExternalTexture(depthData.texture);
+      const textureProperties = this.renderer.properties.get(this.depthTexture) as any;
+      textureProperties.__webglTexture = depthData.texture;
+      this.gpuPixels = new Float32Array(depthData.width * depthData.height);
+
+      const depthShader = new THREE.ShaderMaterial({
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    vUv.y = 1.0-vUv.y;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                precision highp float;
+                precision highp sampler2DArray;
+
+                uniform sampler2DArray uTexture;
+                uniform float uCameraNear;
+                varying vec2 vUv;
+
+                void main() {
+                  float z = texture(uTexture, vec3(vUv, 0)).r;
+                  z = uCameraNear / (1.0 - z);
+                  z = clamp(z, 0.0, 20.0);
+                  
+                  gl_FragColor = vec4(z, 0, 0, 1.0);
+                }
+            `,
+            uniforms: {
+                uTexture: { value: this.depthTexture },
+						    uCameraNear: { value: (depthData as any).depthNear }
+            },
+            blending: THREE.NoBlending,
+            depthTest: false,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+      const depthMesh = new THREE.Mesh(new THREE.PlaneGeometry( 2, 2 ), depthShader);
+      this.depthScene = new THREE.Scene();
+      this.depthScene.add(depthMesh);
+      this.depthCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    }
+
+    const originalRenderTarget = this.renderer.getRenderTarget();
+    this.renderer.xr.enabled = false;
+    this.renderer.setRenderTarget(this.depthTarget);
+    this.renderer.render( this.depthScene, this.depthCamera );
+    this.renderer.readRenderTargetPixels(this.depthTarget, 0, 0, depthData.width, depthData.height,  this.gpuPixels, 0);
+    this.renderer.xr.enabled = true;
+    this.renderer.setRenderTarget(originalRenderTarget);
+
+    return {width: depthData.width, height: depthData.height, data: this.gpuPixels, rawValueToMeters: depthData.rawValueToMeters} as any as XRCPUDepthInformation;
   }
 
   /**

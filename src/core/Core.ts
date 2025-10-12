@@ -193,6 +193,8 @@ export class Core {
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.xr.enabled = true;
+    // disable built-in occlusion
+    this.renderer.xr.getDepthSensingMesh = function(){ return null; }
     this.registry.register(this.renderer);
 
     this.renderer.xr.setReferenceSpaceType(options.referenceSpaceType);
@@ -233,7 +235,7 @@ export class Core {
       webXRRequiredFeatures.push('depth-sensing');
       webXRRequiredFeatures.push('local-floor');
       this.webXRSettings.depthSensing = {
-        usagePreference: ['cpu-optimized'],
+        usagePreference: [],
         dataFormatPreference:
             [this.options.depth.useFloat32 ? 'float32' : 'luminance-alpha'],
       };

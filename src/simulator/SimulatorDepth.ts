@@ -89,6 +89,6 @@ export class SimulatorDepth {
       rawValueToMeters: 1.0,
     };
 
-    this.depth.updateDepthData(depthData as XRCPUDepthInformation, 0);
+    this.depth.updateCPUDepthData(depthData as XRCPUDepthInformation, 0);
   }
 }

@@ -8,6 +8,9 @@ export class OcclusionMapMeshMaterial extends THREE.MeshBasicMaterial {
     super();
     this.uniforms = {
       uDepthTexture: {value: null},
+      uDepthTextureArray: {value: null},
+      uViewId: {value: 0.0},
+      uIsTextureArray: {value: 0.0},
       uRawValueToMeters: {value: 8.0 / 65536.0},
       cameraFar: {value: camera.far},
       cameraNear: {value: camera.near},
@@ -37,9 +40,11 @@ export class OcclusionMapMeshMaterial extends THREE.MeshBasicMaterial {
                   'uniform vec3 diffuse;',
                   [
                     'uniform vec3 diffuse;', 'uniform sampler2D uDepthTexture;',
+                    'uniform sampler2DArray uDepthTextureArray;',
                     'uniform float uRawValueToMeters;',
                     'uniform float cameraNear;', 'uniform float cameraFar;',
-                    'uniform bool uFloatDepth;', 'varying vec2 vTexCoord;',
+                    'uniform bool uFloatDepth;', 'uniform bool uIsTextureArray;',
+                    'uniform int uViewId;', 'varying vec2 vTexCoord;',
                     'varying float vVirtualDepth;'
                   ].join('\n'))
               .replace(
@@ -56,13 +61,16 @@ export class OcclusionMapMeshMaterial extends THREE.MeshBasicMaterial {
     }
     return dot(packedDepthAndVisibility, vec2(255.0, 256.0 * 255.0)) * uRawValueToMeters;
   }
+  float DepthArrayGetMeters(in sampler2DArray depth_texture, in vec2 depth_uv) {
+    return uRawValueToMeters * texture(uDepthTextureArray, vec3 (depth_uv.x, depth_uv.y, uViewId)).r;
+  }
 `
                   ].join('\n'))
               .replace('#include <dithering_fragment>', [
                 '#include <dithering_fragment>',
                 'vec4 texCoord = vec4(vTexCoord, 0, 1);',
                 'vec2 uv = vec2(texCoord.x, 1.0 - texCoord.y);',
-                'highp float real_depth = DepthGetMeters(uDepthTexture, uv);',
+                'highp float real_depth = uIsTextureArray ? DepthArrayGetMeters(uDepthTextureArray, uv) : DepthGetMeters(uDepthTexture, uv);',
                 'gl_FragColor = vec4(step(vVirtualDepth, real_depth), 1.0, 0.0, 1.0);'
               ].join('\n'));
     };

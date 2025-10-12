@@ -27,7 +27,8 @@ export class Depth {
   private xrRefSpace?: XRReferenceSpace|XRBoundedReferenceSpace;
 
   view: XRView[] = [];
-  depthData: XRCPUDepthInformation[] = [];
+  cpuDepthData: XRCPUDepthInformation[] = [];
+  gpuDepthData: XRWebGLDepthInformation[] = [];
   depthArray: DepthArray[] = [];
   depthMesh?: DepthMesh;
   private depthTextures?: DepthTextures;
@@ -143,8 +144,8 @@ export class Depth {
     return vertexPosition;
   }
 
-  updateDepthData(depthData: XRCPUDepthInformation, view_id = 0) {
-    this.depthData[view_id] = depthData;
+  updateCPUDepthData(depthData: XRCPUDepthInformation, view_id = 0) {
+    this.cpuDepthData[view_id] = depthData;
     // Workaround for b/382679381.
     this.rawValueToMeters = depthData.rawValueToMeters;
     if (this.options.useFloat32) {
@@ -167,11 +168,29 @@ export class Depth {
 
     // Updates Depth Texture.
     if (this.options.depthTexture.enabled && this.depthTextures) {
-      this.depthTextures.update(depthData, view_id);
+      this.depthTextures.updateData(depthData, view_id);
     }
 
     if (this.options.depthMesh.enabled && this.depthMesh && view_id == 0) {
-      this.depthMesh.updateDepth(depthData)
+      this.depthMesh.updateDepth(depthData);
+    }
+  }
+
+  updateGPUDepthData(depthData: XRWebGLDepthInformation, view_id = 0) {
+    this.gpuDepthData[view_id] = depthData;
+    // Workaround for b/382679381.
+    this.rawValueToMeters = depthData.rawValueToMeters;
+    if (this.options.useFloat32) {
+      this.rawValueToMeters = 1.0;
+    }
+
+    // Updates Depth Texture.
+    if (this.options.depthTexture.enabled && this.depthTextures) {
+      this.depthTextures.updateNativeTexture(depthData, this.renderer, view_id);
+    }
+
+    if (this.options.depthMesh.enabled && this.depthMesh && view_id == 0) {
+      this.depthMesh.updateGPUDepth(depthData);
     }
   }
 
@@ -202,6 +221,7 @@ export class Depth {
 
     if (!frame) return;
     const session = frame.session;
+    const binding = this.renderer.xr.getBinding();
 
     // Enable or disable depth based on the number of clients.
     const pausingDepthSupported = session.depthActive !== undefined;
@@ -230,11 +250,20 @@ export class Depth {
         for (let view_id = 0; view_id < pose.views.length; ++view_id) {
           const view = pose.views[view_id];
           this.view[view_id] = view;
-          const depthData = frame.getDepthInformation(view);
-          if (!depthData) {
-            return;
+
+          if (session.depthUsage === 'gpu-optimized') {
+            const depthData = binding.getDepthInformation(view);
+            if (!depthData) {
+              return;
+            }
+            this.updateGPUDepthData(depthData, view_id);
+          } else {
+            const depthData = frame.getDepthInformation(view);
+            if (!depthData) {
+              return;
+            }
+            this.updateCPUDepthData(depthData, view_id);
           }
-          this.updateDepthData(depthData, view_id);
         }
       } else {
         console.error('Pose unavailable in the current frame.');
@@ -264,7 +293,7 @@ export class Depth {
   }
 
   debugLog() {
-    const arrayBuffer = this.depthData[0].data;
+    const arrayBuffer = this.cpuDepthData[0].data;
     const uint8Array = new Uint8Array(arrayBuffer);
     // Convert Uint8Array to a string where each character represents a byte
     const binaryString =
