@@ -357,7 +357,6 @@ export class TextView extends View<TextViewEventMap> {
           texture.offset.x = this.imageOffsetX;
           const textObj = this.textObj as unknown as TroikaThreeText.Text;
           textObj.material.map = texture;
-          textObj.material.needsUpdate = true;
           textObj.sync();
         });
       }

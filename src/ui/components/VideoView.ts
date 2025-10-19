@@ -184,7 +184,6 @@ export class VideoView extends View {
 
     this.texture = videoTextureInstance;  // Update internal texture reference
     this.material.map = this.texture;
-    this.material.needsUpdate = true;
 
     const onLoadedMetadata = () => {
       if (this.video!.videoWidth && this.video!.videoHeight) {
@@ -212,7 +211,6 @@ export class VideoView extends View {
   loadFromVideoTexture(videoTextureInstance: THREE.VideoTexture) {
     this.texture = videoTextureInstance;
     this.material.map = this.texture;
-    this.material.needsUpdate = true;
     this.video = this.texture.image;  // Underlying HTMLVideoElement
 
     if (this.video && this.video.videoWidth && this.video.videoHeight) {
