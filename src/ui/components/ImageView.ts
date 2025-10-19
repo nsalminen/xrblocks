@@ -62,7 +62,6 @@ export class ImageView extends View {
       // If no source, ensure no texture is displayed.
       if (this.material.map) {
         this.material.map = null;
-        this.material.needsUpdate = true;
       }
       this.texture?.dispose();
       this.texture = undefined;
@@ -73,7 +72,6 @@ export class ImageView extends View {
     this.texture = this.textureLoader.load(this.src, (loadedTexture) => {
       loadedTexture.colorSpace = THREE.SRGBColorSpace;
       this.material.map = loadedTexture;
-      this.material.needsUpdate = true;
       // Updates layout after the image has loaded to get correct dimensions.
       this.updateLayout();
     });

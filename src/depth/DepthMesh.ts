@@ -157,7 +157,6 @@ export class DepthMesh extends MeshScript {
           this.depthTextures!.depthData.length ?
           this.depthTextures!.depthData[0].rawValueToMeters :
           1.0;
-      (this.material as THREE.Material).needsUpdate = true;
     }
 
     if (this.options.updateVertexNormals) {
