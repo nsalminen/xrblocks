@@ -36,6 +36,7 @@ export class OcclusionPass extends Pass {
   private kawaseBlurTargets: THREE.WebGLRenderTarget[];
   private occlusionUniforms: ShaderUniforms;
   private occlusionQuad: FullScreenQuad;
+  private depthNear: (number|undefined)[] = [];
 
   constructor(
       private scene: THREE.Scene, private camera: THREE.PerspectiveCamera,
@@ -119,14 +120,13 @@ export class OcclusionPass extends Pass {
   }
 
   setDepthTexture(
-      depthTexture: THREE.Texture, rawValueToMeters: number, view_id: number) {
-    if (view_id > 1) {
-      return;
-    }
-    this.depthTextures[view_id] = depthTexture;
+      depthTexture: THREE.Texture, rawValueToMeters: number, viewId: number,
+      depthNear?: number) {
+    this.depthTextures[viewId] = depthTexture;
     this.occlusionMapUniforms.uRawValueToMeters.value = rawValueToMeters;
     this.occlusionMeshMaterial.uniforms.uRawValueToMeters.value =
         rawValueToMeters;
+    this.depthNear[viewId] = depthNear;
     depthTexture.needsUpdate = true;
   }
 
@@ -135,18 +135,18 @@ export class OcclusionPass extends Pass {
    * @param renderer - The three.js renderer.
    * @param writeBuffer - The buffer to write the final result.
    * @param readBuffer - The buffer for the current of virtual depth.
-   * @param view_id - The view to render.
+   * @param viewId - The view to render.
    */
   render(
       renderer: THREE.WebGLRenderer, writeBuffer?: THREE.WebGLRenderTarget,
-      readBuffer?: THREE.WebGLRenderTarget, view_id = 0) {
+      readBuffer?: THREE.WebGLRenderTarget, viewId = 0) {
     const originalRenderTarget = renderer.getRenderTarget();
     const dimensions = new THREE.Vector2();
     if (readBuffer == null) {
-      this.renderOcclusionMapFromScene(renderer, dimensions, view_id);
+      this.renderOcclusionMapFromScene(renderer, dimensions, viewId);
     } else {
       this.renderOcclusionMapFromReadBuffer(
-          renderer, readBuffer, dimensions, view_id);
+          renderer, readBuffer, dimensions, viewId);
     }
 
     // Blur the occlusion map
@@ -159,22 +159,26 @@ export class OcclusionPass extends Pass {
 
   renderOcclusionMapFromScene(
       renderer: THREE.WebGLRenderer, dimensions: THREE.Vector2,
-      view_id: number) {
+      viewId: number) {
     // Compute our own read buffer.
-    const texture = this.depthTextures[view_id];
+    const texture = this.depthTextures[viewId];
     const isTextureArray = texture instanceof THREE.ExternalTexture;
-    this.occlusionMeshMaterial.uniforms.uIsTextureArray.value = isTextureArray?1.0:0;
-    this.occlusionMeshMaterial.uniforms.uViewId.value = view_id;
-    if (isTextureArray)
+    this.occlusionMeshMaterial.uniforms.uIsTextureArray.value =
+        isTextureArray ? 1.0 : 0;
+    this.occlusionMeshMaterial.uniforms.uViewId.value = viewId;
+    if (isTextureArray) {
       this.occlusionMeshMaterial.uniforms.uDepthTextureArray.value = texture;
-    else
+      this.occlusionMeshMaterial.uniforms.uDepthNear.value =
+          this.depthNear[viewId];
+    } else {
       this.occlusionMeshMaterial.uniforms.uDepthTexture.value = texture;
+    }
     this.scene.overrideMaterial = this.occlusionMeshMaterial;
     renderer.getDrawingBufferSize(dimensions);
     this.occlusionMapTexture.setSize(dimensions.x, dimensions.y);
     const renderTarget = this.occlusionMapTexture;
     renderer.setRenderTarget(renderTarget);
-    const camera = renderer.xr.getCamera().cameras[view_id] || this.camera;
+    const camera = renderer.xr.getCamera().cameras[viewId] || this.camera;
     const originalCameraLayers =
         Array.from(Array(32).keys())
             .filter(element => camera.layers.isEnabled(element));
@@ -189,20 +193,23 @@ export class OcclusionPass extends Pass {
 
   renderOcclusionMapFromReadBuffer(
       renderer: THREE.WebGLRenderer, readBuffer: THREE.RenderTarget,
-      dimensions: THREE.Vector2, view_id: number) {
+      dimensions: THREE.Vector2, viewId: number) {
     // Convert the readBuffer into an occlusion map.
     // Render depth into texture
     this.occlusionMapUniforms.tDiffuse.value = readBuffer.texture;
     this.occlusionMapUniforms.tDepth.value = readBuffer.depthTexture;
-    const texture = this.depthTextures[view_id];
+    const texture = this.depthTextures[viewId];
     const isTextureArray = texture instanceof THREE.ExternalTexture;
-    this.occlusionMeshMaterial.uniforms.uIsTextureArray.value = isTextureArray?1.0:0;
-    this.occlusionMeshMaterial.uniforms.uViewId.value = view_id;
-    if (isTextureArray)
+    this.occlusionMeshMaterial.uniforms.uIsTextureArray.value =
+        isTextureArray ? 1.0 : 0;
+    this.occlusionMeshMaterial.uniforms.uViewId.value = viewId;
+    if (isTextureArray) {
       this.occlusionMeshMaterial.uniforms.uDepthTextureArray.value = texture;
-    else
+      this.occlusionMeshMaterial.uniforms.uDepthNear.value =
+          this.depthNear[viewId];
+    } else {
       this.occlusionMeshMaterial.uniforms.uDepthTexture.value = texture;
-
+    }
     // First render the occlusion map to an intermediate buffer.
     renderer.getDrawingBufferSize(dimensions);
     this.occlusionMapTexture.setSize(dimensions.x, dimensions.y);

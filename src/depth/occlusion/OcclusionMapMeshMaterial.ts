@@ -15,6 +15,8 @@ export class OcclusionMapMeshMaterial extends THREE.MeshBasicMaterial {
       cameraFar: {value: camera.far},
       cameraNear: {value: camera.near},
       uFloatDepth: {value: useFloatDepth},
+      // Used for interpreting Quest 3 depth.
+      uDepthNear: {value: 0}
     };
     this.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, this.uniforms);
@@ -43,9 +45,10 @@ export class OcclusionMapMeshMaterial extends THREE.MeshBasicMaterial {
                     'uniform sampler2DArray uDepthTextureArray;',
                     'uniform float uRawValueToMeters;',
                     'uniform float cameraNear;', 'uniform float cameraFar;',
-                    'uniform bool uFloatDepth;', 'uniform bool uIsTextureArray;',
-                    'uniform int uViewId;', 'varying vec2 vTexCoord;',
-                    'varying float vVirtualDepth;'
+                    'uniform bool uFloatDepth;',
+                    'uniform bool uIsTextureArray;',
+                    'uniform float uDepthNear;', 'uniform int uViewId;',
+                    'varying vec2 vTexCoord;', 'varying float vVirtualDepth;'
                   ].join('\n'))
               .replace(
                   '#include <clipping_planes_pars_fragment>',
@@ -62,7 +65,8 @@ export class OcclusionMapMeshMaterial extends THREE.MeshBasicMaterial {
     return dot(packedDepthAndVisibility, vec2(255.0, 256.0 * 255.0)) * uRawValueToMeters;
   }
   float DepthArrayGetMeters(in sampler2DArray depth_texture, in vec2 depth_uv) {
-    return uRawValueToMeters * texture(uDepthTextureArray, vec3 (depth_uv.x, depth_uv.y, uViewId)).r;
+    float textureValue = texture(depth_texture, vec3(depth_uv.x, depth_uv.y, uViewId)).r;
+    return uRawValueToMeters * uDepthNear / (1.0 - textureValue);
   }
 `
                   ].join('\n'))

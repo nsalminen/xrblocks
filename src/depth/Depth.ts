@@ -300,12 +300,16 @@ export class Depth {
     const leftDepthTexture = this.getTexture(0);
     if (leftDepthTexture) {
       this.occlusionPass!.setDepthTexture(
-          leftDepthTexture, this.rawValueToMeters, 0);
+          leftDepthTexture, this.rawValueToMeters, 0,
+          (this.gpuDepthData[0] as unknown as {depthNear: number} | undefined)
+              ?.depthNear);
     }
     const rightDepthTexture = this.getTexture(1);
     if (rightDepthTexture) {
       this.occlusionPass!.setDepthTexture(
-          rightDepthTexture, this.rawValueToMeters, 1);
+          rightDepthTexture, this.rawValueToMeters, 1,
+          (this.gpuDepthData[1] as unknown as {depthNear: number} | undefined)
+              ?.depthNear);
     }
     const xrIsPresenting = this.renderer.xr.isPresenting;
     this.renderer.xr.isPresenting = false;
