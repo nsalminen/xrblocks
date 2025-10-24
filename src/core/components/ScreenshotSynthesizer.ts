@@ -281,10 +281,10 @@ export class ScreenshotSynthesizer {
    * Requests a screenshot from the scene as a DataURL.
    * @param overlayOnCamera - If true, overlays the image on a camera image
    *     without any projection or aspect ratio correction.
-   * @returns Promise which returns the screenshot.
+   * @returns Promise which returns the screenshot as a data uri.
    */
-  async getScreenshot(overlayOnCamera = false) {
-    return await new Promise((resolve, reject) => {
+  async getScreenshot(overlayOnCamera = false): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
       this.pendingScreenshotRequests.push(
         new PendingScreenshotRequest(resolve, reject, overlayOnCamera)
       );
