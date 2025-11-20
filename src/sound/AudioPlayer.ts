@@ -2,6 +2,8 @@ import {Script} from '../core/Script.js';
 
 import {CategoryVolumes} from './CategoryVolumes';
 
+const DEFAULT_SCHEDULE_AHEAD_TIME = 1.0;
+
 export interface AudioPlayerOptions {
   sampleRate?: number;
   channelCount?: number;
@@ -17,6 +19,7 @@ export class AudioPlayer extends Script {
   private categoryVolumes?: CategoryVolumes;
   private volume = 1.0;
   private category = 'speech';
+  scheduleAheadTime = DEFAULT_SCHEDULE_AHEAD_TIME;
 
   constructor(options: AudioPlayerOptions = {}) {
     super();
@@ -101,10 +104,10 @@ export class AudioPlayer extends Script {
   }
 
   private scheduleAudioBuffers() {
-    const SCHEDULE_AHEAD_TIME = 0.2;
     while (
       this.audioQueue.length > 0 &&
-      this.nextStartTime <= this.audioContext!.currentTime + SCHEDULE_AHEAD_TIME
+      this.nextStartTime <=
+        this.audioContext!.currentTime + this.scheduleAheadTime
     ) {
       const audioBuffer = this.audioQueue.shift()!;
       const currentTime = this.audioContext!.currentTime;

@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import * as xb from 'xrblocks';
 import {AUDIO_CAPTURE_PROCESSOR_CODE} from './AudioCaptureProcessorCode';
 
+const DEFAULT_SCHEDULE_AHEAD_TIME = 1.0;
+
 export interface GeminiManagerEventMap extends THREE.Object3DEventMap {
   inputTranscription: {message: string};
   outputTranscription: {message: string};
@@ -36,6 +38,8 @@ export class GeminiManager extends xb.Script<GeminiManagerEventMap> {
   currentInputText: string = '';
   currentOutputText: string = '';
   tools: xb.Tool[] = [];
+
+  scheduleAheadTime = DEFAULT_SCHEDULE_AHEAD_TIME;
 
   constructor() {
     super();
@@ -245,11 +249,10 @@ export class GeminiManager extends xb.Script<GeminiManagerEventMap> {
   }
 
   scheduleAudioBuffers() {
-    const SCHEDULE_AHEAD_TIME = 0.2;
     while (
       this.audioQueue.length > 0 &&
       this.nextAudioStartTime <=
-        this.audioContext!.currentTime + SCHEDULE_AHEAD_TIME
+        this.audioContext!.currentTime + this.scheduleAheadTime
     ) {
       const audioBuffer = this.audioQueue.shift()!;
       const source = this.audioContext!.createBufferSource();
