@@ -28,6 +28,15 @@ function computePinch(context: HandContext, config: GestureConfiguration) {
   const index = getJoint(context, 'index-finger-tip');
   if (!thumb || !index) return undefined;
 
+  const supportMetrics = (['middle', 'ring', 'pinky'] as FingerName[])
+    .map((finger) => computeFingerMetric(context, finger))
+    .filter(Boolean) as FingerMetrics[];
+  const supportCurl =
+    supportMetrics.length > 0
+      ? average(supportMetrics.map((metrics) => metrics.curlRatio))
+      : 1;
+  const supportPenalty = clamp01((supportCurl - 1.05) / 0.35);
+
   const handScale = estimateHandScale(context);
   const threshold = config.threshold ?? Math.max(0.018, handScale * 0.35);
   const distance = thumb.distanceTo(index);
@@ -38,13 +47,15 @@ function computePinch(context: HandContext, config: GestureConfiguration) {
 
   const tightness = clamp01(1 - distance / (threshold * 0.85));
   const loosePenalty = clamp01(1 - distance / (threshold * 1.4));
-  const confidence = clamp01(
+  let confidence = clamp01(
     distance <= threshold ? tightness : loosePenalty * 0.4
   );
+  confidence *= 1 - supportPenalty * 0.45;
+  confidence = clamp01(confidence);
 
   return {
     confidence,
-    data: {distance, threshold},
+    data: {distance, threshold, supportPenalty},
   };
 }
 
@@ -102,13 +113,27 @@ function computeFist(context: HandContext, config: GestureConfiguration) {
     neighbors.average !== Infinity && palmWidth > EPSILON
       ? clamp01((palmWidth * 0.5 - neighbors.average) / (palmWidth * 0.35))
       : 0;
+  const thumbTip = getJoint(context, 'thumb-tip');
+  const indexBase =
+    getFingerJoint(context, 'index', 'phalanx-proximal') ??
+    getFingerJoint(context, 'index', 'metacarpal');
+  const thumbWrapScore =
+    thumbTip && indexBase && palmWidth > EPSILON
+      ? clamp01(
+          (palmWidth * 0.55 - thumbTip.distanceTo(indexBase)) /
+            (palmWidth * 0.35)
+        )
+      : 0;
 
   const tipScore = clamp01(
     (handScale * 0.55 - tipAverage) / (handScale * 0.25)
   );
   const curlScore = clamp01((1.08 - curlAverage) / 0.25);
   const confidence = clamp01(
-    tipScore * 0.5 + curlScore * 0.35 + clusterScore * 0.15
+    tipScore * 0.45 +
+      curlScore * 0.3 +
+      clusterScore * 0.1 +
+      thumbWrapScore * 0.15
   );
 
   return {
@@ -117,6 +142,7 @@ function computeFist(context: HandContext, config: GestureConfiguration) {
       tipAverage,
       curlAverage,
       clusterScore,
+      thumbWrapScore,
       threshold: config.threshold,
     },
   };
