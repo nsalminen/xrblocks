@@ -252,32 +252,26 @@ export class BalloonGame extends xb.Script {
     this.menuPanel.rotation.copy(this.menuRot);
     this.add(this.menuPanel);
     const grid = this.menuPanel.addGrid();
-    grid
-      .addRow({weight: getW(H_TOGGLE)})
-      .addTextButton({
-        text: this.isMenuExpanded ? '\u25B2' : '\u25BC',
-        fontColor: '#ffffff',
-        backgroundColor: '#444444',
-        fontSize: 0.7,
-        weight: 1.0,
-      }).onTriggered = () => this.toggleMenu();
-    this.scoreText = grid
-      .addRow({weight: getW(H_SCORE)})
-      .addText({
-        text: `${this.balloonsPopped} / ${this.balloonCount}`,
-        fontColor: '#ffffff',
-        fontSize: 0.15,
-        textAlign: 'center',
-      });
-    grid
-      .addRow({weight: getW(H_RESET)})
-      .addTextButton({
-        text: '\u21BB',
-        fontColor: '#ffffff',
-        backgroundColor: '#d93025',
-        fontSize: 0.7,
-        weight: 1.0,
-      }).onTriggered = () => this.resetGame();
+    grid.addRow({weight: getW(H_TOGGLE)}).addTextButton({
+      text: this.isMenuExpanded ? '\u25B2' : '\u25BC',
+      fontColor: '#ffffff',
+      backgroundColor: '#444444',
+      fontSize: 0.7,
+      weight: 1.0,
+    }).onTriggered = () => this.toggleMenu();
+    this.scoreText = grid.addRow({weight: getW(H_SCORE)}).addText({
+      text: `${this.balloonsPopped} / ${this.balloonCount}`,
+      fontColor: '#ffffff',
+      fontSize: 0.15,
+      textAlign: 'center',
+    });
+    grid.addRow({weight: getW(H_RESET)}).addTextButton({
+      text: '\u21BB',
+      fontColor: '#ffffff',
+      backgroundColor: '#d93025',
+      fontSize: 0.7,
+      weight: 1.0,
+    }).onTriggered = () => this.resetGame();
     grid.addRow({weight: getW(H_SPACE)});
     if (this.isMenuExpanded) {
       createStepperControl(
