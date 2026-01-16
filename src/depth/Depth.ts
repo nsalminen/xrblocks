@@ -24,6 +24,7 @@ export class Depth {
   private scene!: THREE.Scene;
   private projectionMatrixInverse = new THREE.Matrix4();
 
+  enabled = false;
   view: XRView[] = [];
   cpuDepthData: XRCPUDepthInformation[] = [];
   gpuDepthData: XRWebGLDepthInformation[] = [];
@@ -77,6 +78,7 @@ export class Depth {
     this.options = options;
     this.renderer = renderer;
     this.scene = scene;
+    this.enabled = options.enabled;
 
     if (this.options.depthTexture.enabled) {
       this.depthTextures = new DepthTextures(options);

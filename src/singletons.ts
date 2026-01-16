@@ -45,6 +45,11 @@ export const world = core.world;
  */
 export const ai = core.ai;
 
+/**
+ * A direct alias to the `Depth` instance, which manages depth sensing features.
+ */
+export const depth = core.depth;
+
 // --- Function Aliases ---
 // These are bound shortcuts to frequently used methods for convenience.
 
