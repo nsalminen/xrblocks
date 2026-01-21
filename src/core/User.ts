@@ -442,7 +442,11 @@ export class User extends Script {
       const currentlyTouchedMeshes: THREE.Mesh[] = [];
       this.scene.traverse((object) => {
         if ((object as Partial<THREE.Mesh>).isMesh && object.visible) {
-          tempBox.setFromObject(object);
+          try {
+            tempBox.setFromObject(object);
+          } catch (_) {
+            return;
+          }
           if (tempBox.containsPoint(indexTipPosition)) {
             currentlyTouchedMeshes.push(object as THREE.Mesh);
           }
