@@ -30,7 +30,7 @@ export class ObjectDetector extends Script {
   /**
    * A map from the object's UUID to our custom `DetectedObject` instance.
    */
-  private _detectedObjects = new Map<string, DetectedObject>();
+  private _detectedObjects = new Map<string, DetectedObject<unknown>>();
 
   private _debugVisualsGroup?: THREE.Group;
 
@@ -87,12 +87,12 @@ export class ObjectDetector extends Script {
    * @returns A promise that resolves with an
    * array of detected `DetectedObject` instances.
    */
-  async runDetection() {
+  async runDetection<T = null>(): Promise<DetectedObject<T>[]> {
     this.clear(); // Clear previous results before starting a new detection.
 
     switch (this.options.objects.backendConfig.activeBackend) {
       case 'gemini':
-        return this._runGeminiDetection();
+        return this._runGeminiDetection<T>();
       // Future backends like 'mediapipe' will be handled here.
       // case 'mediapipe':
       //   return this._runMediaPipeDetection();
@@ -109,7 +109,7 @@ export class ObjectDetector extends Script {
   /**
    * Runs object detection using the Gemini backend.
    */
-  private async _runGeminiDetection() {
+  private async _runGeminiDetection<T>(): Promise<DetectedObject<T>[]> {
     if (!this.ai.isAvailable()) {
       console.error('Gemini is unavailable for object detection.');
       return [];
@@ -216,11 +216,11 @@ export class ObjectDetector extends Script {
           cropBox.max.addScalar(margin);
           const objectImage = await cropImage(base64Image, cropBox);
 
-          const object = new DetectedObject(
+          const object = new DetectedObject<T>(
             objectName,
             objectImage,
             boundingBox,
-            additionalData
+            additionalData as T
           );
           object.position.copy(worldPosition);
 
@@ -235,7 +235,7 @@ export class ObjectDetector extends Script {
       });
 
       const detectedObjects = (await Promise.all(detectionPromises)).filter(
-        Boolean
+        (obj): obj is DetectedObject<T> => obj !== null && obj !== undefined
       );
       return detectedObjects;
     } catch (error) {
@@ -254,12 +254,14 @@ export class ObjectDetector extends Script {
    * all objects are returned.
    * @returns An array of `Object` instances.
    */
-  get(label = null) {
+  get<T = null>(label = null): DetectedObject<T>[] {
     const allObjects = Array.from(this._detectedObjects.values());
     if (!label) {
-      return allObjects;
+      return allObjects as DetectedObject<T>[];
     }
-    return allObjects.filter((obj) => obj.label === label);
+    return allObjects.filter(
+      (obj) => obj.label === label
+    ) as DetectedObject<T>[];
   }
 
   /**
@@ -443,7 +445,7 @@ export class ObjectDetector extends Script {
    * (center of its 2D detection bounding box).
    * @param object - The detected object to visualize.
    */
-  private async _createDebugVisual(object: DetectedObject) {
+  private async _createDebugVisual(object: DetectedObject<unknown>) {
     // Create sphere.
     const sphere = new THREE.Mesh(
       new THREE.SphereGeometry(0.03, 16, 16),
