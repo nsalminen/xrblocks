@@ -19,6 +19,7 @@ export class DetectedMesh extends THREE.Mesh {
   private collider?: RAPIER_NS.Collider;
   private blendedWorld?: RAPIER_NS.World;
   private lastChangedTime = 0;
+  semanticLabel?: string;
 
   constructor(xrMesh: XRMesh, material: THREE.Material) {
     const geometry = new THREE.BufferGeometry();
@@ -29,6 +30,7 @@ export class DetectedMesh extends THREE.Mesh {
     geometry.computeVertexNormals();
     super(geometry, material);
     this.lastChangedTime = xrMesh.lastChangedTime;
+    this.semanticLabel = xrMesh.semanticLabel;
   }
 
   initRapierPhysics(RAPIER: typeof RAPIER_NS, blendedWorld: RAPIER_NS.World) {
