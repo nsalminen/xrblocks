@@ -209,7 +209,7 @@ export class Input {
   defaultOnSelectStart(event: ControllerEvent) {
     const controller = event.target;
     controller.userData.selected = true;
-    this._setRaycasterFromController(controller);
+    this.setRaycasterFromController(controller);
     this.performRaycastOnScene(controller);
   }
 
@@ -379,7 +379,7 @@ export class Input {
     obj: THREE.Object3D
   ): THREE.Intersection[] {
     controller.updateMatrixWorld();
-    this._setRaycasterFromController(controller);
+    this.setRaycasterFromController(controller);
     return this.raycaster.intersectObject(obj, false);
   }
 
@@ -429,9 +429,11 @@ export class Input {
       return;
     }
     controller.updateMatrixWorld();
-    this._setRaycasterFromController(controller);
-    this.performRaycastOnScene(controller);
-    this.updateReticleFromIntersections(controller);
+    if (this.options.controllers.performRaycastOnUpdate) {
+      this.setRaycasterFromController(controller);
+      this.performRaycastOnScene(controller);
+      this.updateReticleFromIntersections(controller);
+    }
   }
 
   /**
@@ -440,7 +442,7 @@ export class Input {
    * `setFromXRController`.
    * @param controller - The controller to cast a ray from.
    */
-  private _setRaycasterFromController(controller: THREE.Object3D) {
+  setRaycasterFromController(controller: THREE.Object3D) {
     controller.getWorldPosition(this.raycaster.ray.origin);
     MATRIX4.identity().extractRotation(controller.matrixWorld);
     this.raycaster.ray.direction
