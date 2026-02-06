@@ -30,6 +30,8 @@ export class InputOptions {
   visualization = false;
   /** Whether to show the ray lines extending from the controllers. */
   visualizeRays = false;
+  /** Whether to perform raycast on update. This is needed for the reticle to work properly. */
+  performRaycastOnUpdate = true;
 }
 
 /**
