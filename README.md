@@ -141,7 +141,7 @@ code below:
 git clone --depth=1 git@github.com:google/xrblocks.git
 cd xrblocks
 
-# Install dependencies.
+# Install dependencies and build the SDK.
 npm ci
 ```
 
@@ -150,12 +150,12 @@ described below.
 
 #### Serve samples and demos
 
-Build once, then serve the repository to enable viewing samples and demos
-through `http://localhost:8080/`:
+Serve the repository to view samples and demos through
+`http://localhost:8080/`:
 
 ```bash
-npm run build # Build xrblocks.js once before serving
-npm run serve # Serve the repository on http://localhost:8080
+# Serve the repository on http://localhost:8080
+npm run serve
 ```
 
 #### Develop locally
@@ -163,7 +163,8 @@ npm run serve # Serve the repository on http://localhost:8080
 For active SDK development, run watch mode and local serving together:
 
 ```bash
-npm run dev # Build xrblocks.js in watch mode and serve the repository on http://localhost:8080
+# Build the SDK in watch mode and serve the repository on http://localhost:8080
+npm run dev
 ```
 
 #### Linting and formatting
