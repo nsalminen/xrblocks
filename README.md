@@ -132,9 +132,9 @@ code below:
 </html>
 ```
 
-### Development guide
+### Development Guide
 
-Follow the steps below to clone the repository and build XR Blocks:
+#### Setup
 
 ```bash
 # Clone the repository.
@@ -143,17 +143,46 @@ cd xrblocks
 
 # Install dependencies.
 npm ci
+```
 
-# Build xrblocks.js.
-npm run build
+After setup, either serve the samples and demos or develop locally, as
+described below.
 
-# After making changes, check ESLint and run Prettier
+#### Serve samples and demos
+
+Build once, then serve the repository to enable viewing samples and demos
+through `http://localhost:8080/`:
+
+```bash
+npm run build # Build xrblocks.js once before serving
+npm run serve # Serve the repository on http://localhost:8080
+```
+
+#### Develop locally
+
+For active SDK development, run watch mode and local serving together:
+
+```bash
+npm run dev # Build xrblocks.js in watch mode and serve the repository on http://localhost:8080
+```
+
+#### Linting and formatting
+
+XR Blocks uses ESLint for linting and Prettier for formatting. Run the
+following commands to check your code before submitting a pull request:
+
+```bash
 npm run lint # ESLint check
 npm run format # Prettier format
 ```
 
-XR Blocks uses ESLint for linting and Prettier for formatting.
-If coding in VSCode, make sure to install the [ESLint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) and the [Prettier extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode). Then set Prettier as your default formatter.
+If you are using VS Code, install the
+[ESLint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+and the
+[Prettier extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode),
+then set Prettier as your default formatter.
+
+#### Notice
 
 This is not an officially supported Google product, but will be actively
 maintained by the XR Labs team and external collaborators. This project is not
