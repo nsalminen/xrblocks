@@ -39,6 +39,8 @@ const moveDirection = new THREE.Vector3();
  */
 class WalkthroughManager extends xb.Script {
   async init() {
+    this.add(new THREE.HemisphereLight(0xffffff, 0x666666, 3));
+
     // Load all splat meshes in parallel.
     this.splatMeshes = await Promise.all(
       SPLAT_ASSETS.map(async (asset) => {
@@ -48,7 +50,7 @@ class WalkthroughManager extends xb.Script {
         mesh.quaternion.copy(asset.quaternion);
         mesh.scale.copy(asset.scale);
         return mesh;
-      }),
+      })
     );
 
     // Create a SparkRenderer for gaussian splat rendering and register it so
@@ -81,7 +83,7 @@ class WalkthroughManager extends xb.Script {
       new LongSelectHandler(this.cycleSplat.bind(this), {
         triggerDelay: 1500,
         triggerCooldownDuration: 1500,
-      }),
+      })
     );
   }
 
@@ -149,7 +151,8 @@ class WalkthroughManager extends xb.Script {
         xb.add(nextMesh);
       }
       // Fading in the new splat.
-      const inProgress = (this.fadeProgress - FADE_DURATION_S) / FADE_DURATION_S;
+      const inProgress =
+        (this.fadeProgress - FADE_DURATION_S) / FADE_DURATION_S;
       this.splatMeshes[this.currentIndex].opacity = easeInOutSine(inProgress);
     } else {
       // Fade complete.
@@ -187,7 +190,7 @@ class WalkthroughManager extends xb.Script {
     this.locomotionOffset.addScaledVector(moveDirection, -MOVE_SPEED);
     const transform = new XRRigidTransform(this.locomotionOffset);
     xr.setReferenceSpace(
-      this.baseReferenceSpace.getOffsetReferenceSpace(transform),
+      this.baseReferenceSpace.getOffsetReferenceSpace(transform)
     );
   }
 }
