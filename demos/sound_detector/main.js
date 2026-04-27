@@ -50,19 +50,42 @@ class SoundDisplay extends xb.Script {
 
     if (this.world.sounds) {
       this.world.sounds.addEventListener('soundDetected', (event) => {
-        const {categories, debug} = event.detail;
+        const result = event.detail;
 
-        if (categories !== null) {
-          if (categories.length > 0) {
-            const best = categories[0];
-            this.lastClassification = `${best.categoryName} (${Math.round(best.score * 100)}%)`;
-          } else {
-            this.lastClassification = 'Unknown Sound';
+        let bestCategory = null;
+        let bestScore = -1;
+
+        const items = result ? result.items : [];
+
+        if (items && items.length > 0) {
+          const firstItem = items[0];
+          if (
+            firstItem.classifications &&
+            firstItem.classifications.length > 0
+          ) {
+            const firstClassification = firstItem.classifications[0];
+            if (
+              firstClassification.categories &&
+              firstClassification.categories.length > 0
+            ) {
+              bestCategory = firstClassification.categories[0];
+              bestScore = bestCategory.score;
+            }
           }
         }
 
-        const {rms, bufferSize, totalAccumulated, sampleRate} = debug;
-        const debugStr = `RMS: ${rms.toFixed(4)} | B: ${bufferSize} | T: ${totalAccumulated} | S: ${sampleRate}`;
+        if (bestCategory) {
+          this.lastClassification = `${bestCategory.categoryName} (${Math.round(bestScore * 100)}%)`;
+        } else {
+          this.lastClassification = 'Unknown Sound';
+        }
+
+        const debug = result ? result.debug : null;
+        let debugStr = '';
+        if (debug) {
+          const {rms, bufferSize, sampleRate} = debug;
+          debugStr = `RMS: ${rms.toFixed(4)} | B: ${bufferSize} | S: ${sampleRate}`;
+        }
 
         if (this.lastClassification) {
           this.hudText.text = `${this.lastClassification}\n${debugStr}`;
