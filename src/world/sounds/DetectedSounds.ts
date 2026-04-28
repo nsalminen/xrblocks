@@ -22,8 +22,3 @@ export interface AudioClassifierResult {
   items: AudioClassifierResultItem[];
   debug?: DebugData;
 }
-
-export interface SoundDetectedEventDetail {
-  categories: Category[] | null;
-  debug: DebugData;
-}

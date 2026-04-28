@@ -1,13 +1,21 @@
+import * as THREE from 'three';
 import {Script} from '../../core/Script';
 import {WorldOptions} from '../WorldOptions';
 import {AudioListener} from '../../sound/AudioListener';
 import {MediaPipeDetectorBackend} from './backends/MediaPipeDetectorBackend';
 import {BaseDetectorBackend} from './SoundDetectorBackend';
+import {AudioClassifierResult} from './DetectedSounds';
+
+interface SoundDetectorEventMap extends THREE.Object3DEventMap {
+  soundDetected: {
+    audioClassifierResult: AudioClassifierResult;
+  };
+}
 
 /**
  * Detects sounds from the mic input stream using MediaPipe's Audio Classifier.
  */
-export class SoundDetector extends Script {
+export class SoundDetector extends Script<SoundDetectorEventMap> {
   static dependencies = {options: WorldOptions};
 
   private backendPromises = new Map<string, Promise<BaseDetectorBackend>>();
@@ -60,8 +68,6 @@ export class SoundDetector extends Script {
 
     if (!this.audioListener) {
       this.audioListener = new AudioListener({
-        sampleRate: 44000,
-        channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
@@ -79,12 +85,12 @@ export class SoundDetector extends Script {
 
           const normalizedAudio = backend.normalizeAudio(buffer);
 
-          const result = backend.classify(normalizedAudio);
-          if (result) {
+          const audioClassifierResult = backend.classify(normalizedAudio);
+          if (audioClassifierResult) {
             this.dispatchEvent({
               type: 'soundDetected',
-              detail: result,
-            } as any);
+              audioClassifierResult: audioClassifierResult,
+            });
           }
         },
       });

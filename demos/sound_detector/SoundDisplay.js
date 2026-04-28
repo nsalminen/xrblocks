@@ -15,7 +15,7 @@ export class SoundDisplay extends xb.Script {
 
     if (this.world.sounds) {
       this.world.sounds.addEventListener('soundDetected', (event) => {
-        const result = event.detail;
+        const result = event.audioClassifierResult;
 
         const bestCategory = this.getBestCategory(result);
         const bestScore = bestCategory ? bestCategory.score : -1;
