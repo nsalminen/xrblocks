@@ -16,8 +16,8 @@ const SCENES = [
   CyberpunkScene,
 ];
 
-const ARC_RADIUS = 2.2;       // distance from user to each portal (meters)
-const ARC_SPAN = Math.PI * 0.85;  // total arc span (~150°)
+const ARC_RADIUS = 2.2; // distance from user to each portal (meters)
+const ARC_SPAN = Math.PI * 0.85; // total arc span (~150°)
 
 /**
  * A gallery of 5 portals arranged in a gentle arc in front of the user.
@@ -82,11 +82,14 @@ export class PortalGalleryScene extends xb.Script {
         }
       }
       const depthMesh = xb.core.depth?.depthMesh;
-      const intersection = depthMesh
-          && xb.core.user?.select?.(depthMesh, controller);
+      const intersection =
+        depthMesh && xb.core.user?.select?.(depthMesh, controller);
       if (intersection) {
-        this._held.placeAt(intersection.point, intersection.face?.normal,
-                           intersection.object?.matrixWorld);
+        this._held.placeAt(
+          intersection.point,
+          intersection.face?.normal,
+          intersection.object?.matrixWorld
+        );
         this._held.setHeld(false);
         this._held = null;
       }

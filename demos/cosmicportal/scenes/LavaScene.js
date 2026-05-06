@@ -4,8 +4,8 @@
 export const LavaScene = {
   name: 'Volcano',
 
-  ringCool:  'vec3(0.95, 0.30, 0.05)',
-  ringWarm:  'vec3(1.00, 0.85, 0.20)',
+  ringCool: 'vec3(0.95, 0.30, 0.05)',
+  ringWarm: 'vec3(1.00, 0.85, 0.20)',
   haloInner: 'vec3(1.00, 0.45, 0.10)',
   haloOuter: 'vec3(1.00, 0.85, 0.30)',
 

@@ -4,8 +4,8 @@
 export const CyberpunkScene = {
   name: 'Cyberpunk',
 
-  ringCool:  'vec3(0.95, 0.10, 0.55)',
-  ringWarm:  'vec3(0.10, 0.95, 0.95)',
+  ringCool: 'vec3(0.95, 0.10, 0.55)',
+  ringWarm: 'vec3(0.10, 0.95, 0.95)',
   haloInner: 'vec3(1.00, 0.20, 0.65)',
   haloOuter: 'vec3(0.20, 0.90, 1.00)',
 

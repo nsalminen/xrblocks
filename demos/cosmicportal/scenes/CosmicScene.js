@@ -4,8 +4,8 @@
 export const CosmicScene = {
   name: 'Cosmic',
 
-  ringCool:  'vec3(0.35, 0.7, 1.0)',
-  ringWarm:  'vec3(1.0, 0.55, 0.9)',
+  ringCool: 'vec3(0.35, 0.7, 1.0)',
+  ringWarm: 'vec3(1.0, 0.55, 0.9)',
   haloInner: 'vec3(0.4, 0.7, 1.0)',
   haloOuter: 'vec3(1.0, 0.6, 0.9)',
 

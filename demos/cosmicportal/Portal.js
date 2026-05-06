@@ -84,8 +84,7 @@ export class Portal extends THREE.Object3D {
     if (this._bobBaseY === null) this._bobBaseY = this.position.y;
     const bobAmp = this._held ? 0.06 : 0.03;
     const bobSpd = this._held ? 0.9 : 0.25;
-    this.position.y =
-        this._bobBaseY + Math.sin(this._t * bobSpd) * bobAmp;
+    this.position.y = this._bobBaseY + Math.sin(this._t * bobSpd) * bobAmp;
 
     if (this._disc.material.uniforms) {
       this._disc.material.uniforms.uTime.value = this._t;
@@ -104,19 +103,19 @@ export class Portal extends THREE.Object3D {
 
   _buildDisc() {
     const s = this._scene;
-    const ringCool  = s.ringCool  || 'vec3(0.35, 0.7, 1.0)';
-    const ringWarm  = s.ringWarm  || 'vec3(1.0, 0.55, 0.9)';
+    const ringCool = s.ringCool || 'vec3(0.35, 0.7, 1.0)';
+    const ringWarm = s.ringWarm || 'vec3(1.0, 0.55, 0.9)';
     const haloInner = s.haloInner || 'vec3(0.4, 0.7, 1.0)';
     const haloOuter = s.haloOuter || 'vec3(1.0, 0.6, 0.9)';
-    this._ringCool  = ringCool;
-    this._ringWarm  = ringWarm;
+    this._ringCool = ringCool;
+    this._ringWarm = ringWarm;
     this._haloInner = haloInner;
     this._haloOuter = haloOuter;
 
     const sceneUniforms = s.uniforms || {};
     const sceneUniformDecls = Object.entries(sceneUniforms)
-        .map(([name, u]) => `uniform ${u.type || 'float'} ${name};`)
-        .join('\n        ');
+      .map(([name, u]) => `uniform ${u.type || 'float'} ${name};`)
+      .join('\n        ');
 
     const geom = new THREE.CircleGeometry(PORTAL_RADIUS, 96);
     const mat = new THREE.ShaderMaterial({
@@ -124,7 +123,8 @@ export class Portal extends THREE.Object3D {
         uTime: {value: 0},
         uCamLocal: {value: new THREE.Vector3(0, 0, 1.6)},
         ...Object.fromEntries(
-            Object.entries(sceneUniforms).map(([n, u]) => [n, {value: u.value}]))
+          Object.entries(sceneUniforms).map(([n, u]) => [n, {value: u.value}])
+        ),
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
@@ -264,8 +264,11 @@ export class Portal extends THREE.Object3D {
   }
 
   _buildHalo() {
-    const haloGeom = new THREE.RingGeometry(PORTAL_RADIUS * 1.02,
-                                            PORTAL_RADIUS * 1.55, 64);
+    const haloGeom = new THREE.RingGeometry(
+      PORTAL_RADIUS * 1.02,
+      PORTAL_RADIUS * 1.55,
+      64
+    );
     const haloMat = new THREE.ShaderMaterial({
       vertexShader: /* glsl */ `
         varying vec2 vUv;

@@ -4,8 +4,8 @@
 export const UnderwaterScene = {
   name: 'Underwater',
 
-  ringCool:  'vec3(0.10, 0.55, 0.85)',
-  ringWarm:  'vec3(0.25, 0.95, 0.85)',
+  ringCool: 'vec3(0.10, 0.55, 0.85)',
+  ringWarm: 'vec3(0.25, 0.95, 0.85)',
   haloInner: 'vec3(0.20, 0.70, 1.00)',
   haloOuter: 'vec3(0.30, 1.00, 0.85)',
 

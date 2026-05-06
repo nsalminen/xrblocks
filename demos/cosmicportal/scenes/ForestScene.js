@@ -4,8 +4,8 @@
 export const ForestScene = {
   name: 'Forest',
 
-  ringCool:  'vec3(0.10, 0.45, 0.20)',
-  ringWarm:  'vec3(0.85, 0.95, 0.40)',
+  ringCool: 'vec3(0.10, 0.45, 0.20)',
+  ringWarm: 'vec3(0.85, 0.95, 0.40)',
   haloInner: 'vec3(0.30, 0.85, 0.55)',
   haloOuter: 'vec3(0.85, 1.00, 0.55)',
 
