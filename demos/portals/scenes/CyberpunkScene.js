@@ -40,16 +40,22 @@ export const CyberpunkScene = {
   `,
 
   body: /* glsl */ `
+    // Stereo parallax layers.
+    vec2 pFar  = parallaxP(p, rd, 0.35);
+    vec2 pBack = parallaxP(p, rd, 0.22);
+    vec2 pMid  = parallaxP(p, rd, 0.12);
+    vec2 pNear = parallaxP(p, rd, 0.04);
+
     // ---- Sky: deep purple haze with magenta horizon glow ----
     vec3 skyHigh = vec3(0.04, 0.02, 0.10);
     vec3 skyMid  = vec3(0.20, 0.05, 0.30);
     vec3 skyLow  = vec3(0.50, 0.10, 0.45);
-    col = mix(skyLow, skyMid, smoothstep(-0.2, 0.4, p.y));
-    col = mix(col, skyHigh, smoothstep(0.4, 1.0, p.y));
+    col = mix(skyLow, skyMid, smoothstep(-0.2, 0.4, pFar.y));
+    col = mix(col, skyHigh, smoothstep(0.4, 1.0, pFar.y));
 
     // Drifting smog/clouds.
-    float smog = fbm(vec2(p.x * 2.0 + uTime * 0.05, p.y * 2.0));
-    col = mix(col, vec3(0.35, 0.10, 0.40), smog * smoothstep(0.0, 0.6, p.y) * 0.4);
+    float smog = fbm(vec2(pFar.x * 2.0 + uTime * 0.05, pFar.y * 2.0));
+    col = mix(col, vec3(0.35, 0.10, 0.40), smog * smoothstep(0.0, 0.6, pFar.y) * 0.4);
 
     // ---- City skyline: layered buildings with windows ----
     // Back layer (distant, hazy purple).
@@ -60,10 +66,10 @@ export const CyberpunkScene = {
         float w  = 0.05 + hash(vec2(fi, 1.7)) * 0.025;
         float h  = 0.45 + hash(vec2(fi, 4.3)) * 0.20;
         float baseY = -0.5;
-        float b = buildingMask(p, cx, w, h, baseY);
+        float b = buildingMask(pBack, cx, w, h, baseY);
         col = mix(col, vec3(0.10, 0.05, 0.20), b * 0.7);
         // Faint window lights.
-        float win = windowsAt(p, cx, w, h, baseY, fi);
+        float win = windowsAt(pBack, cx, w, h, baseY, fi);
         col = mix(col, vec3(0.85, 0.55, 0.95), win * 0.5);
       }
     }
@@ -75,10 +81,10 @@ export const CyberpunkScene = {
         float w  = 0.08 + hash(vec2(fi, 11.7)) * 0.03;
         float h  = 0.65 + hash(vec2(fi, 24.3)) * 0.25;
         float baseY = -0.7;
-        float b = buildingMask(p, cx, w, h, baseY);
+        float b = buildingMask(pMid, cx, w, h, baseY);
         col = mix(col, vec3(0.02, 0.03, 0.08), b);
         // Bright neon windows.
-        float win = windowsAt(p, cx, w, h, baseY, fi + 100.0);
+        float win = windowsAt(pMid, cx, w, h, baseY, fi + 100.0);
         vec3 winCol = mix(vec3(0.20, 0.95, 1.00),
                           vec3(1.00, 0.30, 0.65),
                           hash(vec2(fi, 33.7)));
@@ -92,7 +98,7 @@ export const CyberpunkScene = {
         float fi = float(i);
         float cx = (fi - 1.5) * 0.55 + 0.05;
         float cy = -0.20 + hash(vec2(fi, 13.7)) * 0.4;
-        vec2 d = p - vec2(cx, cy);
+        vec2 d = pMid - vec2(cx, cy);
         // Vertical neon strip.
         float strip = smoothstep(0.012, 0.0, abs(d.x))
                     * smoothstep(0.10, 0.0, abs(d.y));
@@ -111,7 +117,7 @@ export const CyberpunkScene = {
     // ---- Always-on rain (diagonal streaks) ----
     {
       // Rotated coordinates for diagonal rain.
-      vec2 rp = vec2(p.x + p.y * 0.3, p.y);
+      vec2 rp = vec2(pNear.x + pNear.y * 0.3, pNear.y);
       vec2 g = vec2(rp.x * 30.0, rp.y * 4.0 - uTime * 6.0);
       vec2 cell = floor(g);
       vec2 f = fract(g);
@@ -124,17 +130,17 @@ export const CyberpunkScene = {
     }
 
     // Wet street reflections at the bottom.
-    if (p.y < -0.55) {
-      float refl = smoothstep(-0.55, -1.0, p.y);
+    if (pNear.y < -0.55) {
+      float refl = smoothstep(-0.55, -1.0, pNear.y);
       // Reflect city colors with vertical streaks.
       vec3 wetCol = vec3(0.10, 0.05, 0.20)
-                  + vec3(1.0, 0.3, 0.7) * sin(p.x * 8.0 + uTime * 2.0) * 0.05;
+                  + vec3(1.0, 0.3, 0.7) * sin(pNear.x * 8.0 + uTime * 2.0) * 0.05;
       // Distorted vertical light streaks.
-      float lights = sin(p.x * 30.0 + uTime * 1.0) * 0.5 + 0.5;
+      float lights = sin(pNear.x * 30.0 + uTime * 1.0) * 0.5 + 0.5;
       lights = pow(lights, 4.0) * refl;
       col = mix(col, wetCol, refl * 0.7);
       col += vec3(1.0, 0.4, 0.8) * lights * 0.4;
-      col += vec3(0.4, 0.95, 1.0) * pow(sin(p.x * 18.0 - uTime * 0.7), 6.0)
+      col += vec3(0.4, 0.95, 1.0) * pow(sin(pNear.x * 18.0 - uTime * 0.7), 6.0)
            * refl * 0.5;
     }
 
@@ -147,7 +153,7 @@ export const CyberpunkScene = {
         float dir = (mod(fi, 2.0) < 0.5) ? 1.0 : -1.0;
         float by = -0.05 + (hash(vec2(fi, 5.5)) - 0.5) * 0.4;
         float bx = -1.6 * dir + dir * local * (1.6 / cycle) * 2.0;
-        vec2 d = p - vec2(bx, by);
+        vec2 d = pMid - vec2(bx, by);
         // Compact body.
         float body = smoothstep(0.030, 0.024, abs(d.x))
                    * smoothstep(0.008, 0.0, abs(d.y));
@@ -175,10 +181,10 @@ export const CyberpunkScene = {
       float life = smoothstep(0.0, 1.0, local) * smoothstep(7.0, 5.0, local);
       // Big rectangle in upper sky.
       vec2 hc = vec2((hash(vec2(k, 11.1)) - 0.5) * 0.8, 0.45);
-      vec2 d = p - hc;
+      vec2 d = pBack - hc;
       float box = step(abs(d.x), 0.30) * step(abs(d.y), 0.18);
       // Scanlines.
-      float scan = 0.5 + 0.5 * sin(p.y * 80.0 - uTime * 6.0);
+      float scan = 0.5 + 0.5 * sin(pBack.y * 80.0 - uTime * 6.0);
       // Glitchy face/icon: just bands of color.
       float bands = step(0.5, fract(d.y * 8.0 + uTime * 0.5));
       vec3 holoCol = mix(vec3(0.20, 0.95, 1.00),
@@ -207,13 +213,13 @@ export const CyberpunkScene = {
           float baseX = -1.6 + prog * 0.45;
           float baseY = 0.30 + sin(prog * 3.0 + fi * 1.5) * 0.05
                       + (hash(vec2(k, fi + 11.7)) - 0.5) * 0.15;
-          vec2 dr = p - vec2(baseX, baseY);
+          vec2 dr = pMid - vec2(baseX, baseY);
           float body = smoothstep(0.006, 0.0, length(dr));
           col += vec3(0.40, 0.85, 1.00) * body * 1.8 * life;
           // Blink red beneath.
           float blink = step(0.5, fract(uTime * 4.0 + fi));
           float light = smoothstep(0.004, 0.0,
-              length(p - vec2(baseX, baseY - 0.008))) * blink;
+              length(pMid - vec2(baseX, baseY - 0.008))) * blink;
           col += vec3(1.0, 0.20, 0.20) * light * 1.5 * life;
         }
       }
@@ -227,14 +233,14 @@ export const CyberpunkScene = {
       float flash = smoothstep(0.0, 0.04, local) * smoothstep(0.6, 0.05, local);
       flash *= 0.5 + 0.5 * sin(local * 50.0);
       // Sky-wide brightening.
-      float upper = smoothstep(-0.4, 0.5, p.y);
+      float upper = smoothstep(-0.4, 0.5, pFar.y);
       col += vec3(0.65, 0.55, 0.95) * flash * upper * 0.6;
       // Vertical fork.
       float bx = (hash(vec2(k, 19.7)) - 0.5) * 1.6;
-      float zigzag = bx + sin(p.y * 22.0 + k) * 0.05
-                       + sin(p.y * 60.0 + k * 3.0) * 0.015;
-      float bolt = smoothstep(0.005, 0.0, abs(p.x - zigzag))
-                 * smoothstep(-0.4, 1.0, p.y);
+      float zigzag = bx + sin(pFar.y * 22.0 + k) * 0.05
+                       + sin(pFar.y * 60.0 + k * 3.0) * 0.015;
+      float bolt = smoothstep(0.005, 0.0, abs(pFar.x - zigzag))
+                 * smoothstep(-0.4, 1.0, pFar.y);
       col += vec3(0.85, 0.75, 1.20) * bolt * flash * 4.0;
     }
 
@@ -245,7 +251,7 @@ export const CyberpunkScene = {
       float local = uTime - k * cycle;
       vec2 ep = vec2((hash(vec2(k, 23.1)) - 0.5) * 1.2,
                      -0.10 + hash(vec2(k, 31.3)) * 0.3);
-      float dr = length(p - ep);
+      float dr = length(pBack - ep);
       float flash = smoothstep(0.0, 0.15, local) * smoothstep(3.5, 0.3, local);
       float core = smoothstep(0.04, 0.0, dr) * 4.0;
       float bloom = smoothstep(0.5, 0.0, dr) * 1.0;

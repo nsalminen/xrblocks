@@ -50,8 +50,14 @@ export const UnderwaterScene = {
   `,
 
   body: /* glsl */ `
+    // Stereo parallax layers.
+    vec2 pFar  = parallaxP(p, rd, 0.35);
+    vec2 pBack = parallaxP(p, rd, 0.22);
+    vec2 pMid  = parallaxP(p, rd, 0.12);
+    vec2 pNear = parallaxP(p, rd, 0.04);
+
     // Vertical depth gradient: bright surface up top, abyss below.
-    float depth = 0.5 - p.y * 0.5;
+    float depth = 0.5 - pFar.y * 0.5;
     vec3 surface = vec3(0.20, 0.65, 0.85);
     vec3 mid     = vec3(0.05, 0.30, 0.55);
     vec3 abyss   = vec3(0.00, 0.05, 0.18);
@@ -59,9 +65,9 @@ export const UnderwaterScene = {
     col = mix(col,     abyss, smoothstep(0.55, 1.0, depth));
 
     // Slow swaying water — sample-domain warp.
-    vec2 warp = vec2(sin(uTime * 0.4 + p.y * 3.0) * 0.02,
-                     cos(uTime * 0.3 + p.x * 2.0) * 0.02);
-    vec2 wp = p + warp;
+    vec2 warp = vec2(sin(uTime * 0.4 + pFar.y * 3.0) * 0.02,
+                     cos(uTime * 0.3 + pFar.x * 2.0) * 0.02);
+    vec2 wp = pFar + warp;
 
     // God-ray sunbeams streaming down from upper-left.
     {
@@ -79,21 +85,22 @@ export const UnderwaterScene = {
         ray += band * (0.4 + 0.6 * sin(uTime * 0.6 + fi));
       }
       // Falloff with depth & jitter.
-      ray *= smoothstep(1.0, -0.4, p.y);
+      ray *= smoothstep(1.0, -0.4, pFar.y);
       ray *= 0.7 + 0.3 * fbm(vec2(u * 6.0, v * 3.0 + uTime * 0.4));
       col += vec3(0.60, 0.90, 1.00) * ray * 0.55;
     }
 
     // Caustic shimmer near the surface.
     float caus = caustic(wp + vec2(0.0, uTime * 0.05), uTime);
-    caus *= smoothstep(0.6, -0.6, p.y);
+    caus *= smoothstep(0.6, -0.6, pFar.y);
     col += vec3(0.50, 0.95, 1.00) * caus * 0.35;
 
     // Marine snow / drifting particles (always-on).
     {
-      float s = starsLayer(vUv * 3.0 + vec2(0.0, uTime * 0.05), 60.0, 0.985);
+      vec2 uvNear = pNear * 0.5 + 0.5;
+      float s = starsLayer(uvNear * 3.0 + vec2(0.0, uTime * 0.05), 60.0, 0.985);
       col += vec3(0.85, 0.95, 1.0) * s * 0.7;
-      float s2 = starsLayer(vUv * 3.0 + vec2(7.0, uTime * 0.10), 110.0, 0.992);
+      float s2 = starsLayer(uvNear * 3.0 + vec2(7.0, uTime * 0.10), 110.0, 0.992);
       col += vec3(0.7, 0.85, 1.0) * s2 * 0.5;
     }
 
@@ -107,7 +114,7 @@ export const UnderwaterScene = {
         float baseY = -0.15 + row * 0.10
                     + sin(t * 0.6 + col_i * 0.5) * 0.04;
         float baseX = mod(col_i * 0.18 + t * 0.18 + row * 0.4, 2.4) - 1.4;
-        vec2 d = p - vec2(baseX, baseY);
+        vec2 d = pMid - vec2(baseX, baseY);
         float wig = sin(t * 4.0 + col_i + row * 1.7) * 0.005;
         d.y += wig;
         float f = fishShape(d, 1.0);
@@ -131,7 +138,7 @@ export const UnderwaterScene = {
           float by = -1.0 + life * 0.45;
           float bx = baseX + sin(life * 3.0 + fi) * 0.04;
           float br = 0.012 + fi * 0.003;
-          float d = length(p - vec2(bx, by));
+          float d = length(pNear - vec2(bx, by));
           float bub = smoothstep(br, br * 0.5, d);
           // Highlight rim
           float rim = smoothstep(br, br * 0.85, d) - smoothstep(br * 0.85, br * 0.7, d);
@@ -153,7 +160,7 @@ export const UnderwaterScene = {
                     + sin(uTime * 0.6 + fi) * 0.05;
         float baseY = -0.2 + sin(uTime * 0.4 + fi * 1.3) * 0.3 + fi * 0.06;
         vec2 c = vec2(baseX, baseY);
-        vec2 d = p - c;
+        vec2 d = pMid - c;
         // Bell (top hemisphere)
         float bellR = 0.06 + fi * 0.005;
         float bell = smoothstep(bellR, bellR * 0.85, length(d))
@@ -186,12 +193,12 @@ export const UnderwaterScene = {
       // Slow horizontal drift.
       float baseY = (hash(vec2(k, 41.7)) - 0.5) * 0.4;
       vec2 c = vec2(-1.8 + local * 0.18, baseY);
-      vec2 d = p - c;
+      vec2 d = pBack - c;
       float wave = uTime * 1.5 + k;
       float w = whaleShape(d, wave);
       // Body color: deep blue-gray with white spots.
       vec3 body = vec3(0.20, 0.30, 0.40);
-      float spots = step(0.7, hash(floor((p - c) * vec2(40.0, 60.0))));
+      float spots = step(0.7, hash(floor((pBack - c) * vec2(40.0, 60.0))));
       body = mix(body, vec3(0.80, 0.90, 1.0), spots * 0.6);
       // Belly highlight (lower side lighter).
       body = mix(body, vec3(0.50, 0.65, 0.75),
@@ -206,12 +213,12 @@ export const UnderwaterScene = {
       float local = uTime - k * cycle;
       vec2 bp = vec2(hash(vec2(k, 51.3)) * 1.4 - 0.7,
                      hash(vec2(k, 67.7)) * 1.4 - 0.7);
-      float dr = length(p - bp);
+      float dr = length(pMid - bp);
       float flash = smoothstep(0.0, 0.1, local) * smoothstep(2.5, 0.2, local);
       float core = smoothstep(0.04, 0.0, dr) * 3.5;
       float halo = smoothstep(0.4, 0.0, dr) * 1.0;
       // Sparks radiating outward
-      float ang = atan(p.y - bp.y, p.x - bp.x);
+      float ang = atan(pMid.y - bp.y, pMid.x - bp.x);
       float spark = pow(0.5 + 0.5 * cos(ang * 18.0 + local * 8.0), 6.0)
                   * smoothstep(0.30, 0.04, dr);
       vec3 bioCol = mix(vec3(0.30, 1.00, 0.85),
@@ -229,13 +236,13 @@ export const UnderwaterScene = {
       // Quick double-flash
       flash *= 0.5 + 0.5 * sin(local * 50.0);
       // Whole upper region brightens through caustics.
-      float upper = smoothstep(1.0, -0.2, p.y);
+      float upper = smoothstep(1.0, -0.2, pFar.y);
       col += vec3(0.70, 0.85, 1.00) * flash * upper * 0.9;
       // Bright fork from upper edge.
       float fx = hash(vec2(k, 91.7)) * 1.6 - 0.8;
       float fork = smoothstep(0.012, 0.0,
-          abs(p.x - (fx + sin(p.y * 14.0 + k) * 0.04)))
-        * smoothstep(-0.8, 1.0, p.y);
+          abs(pFar.x - (fx + sin(pFar.y * 14.0 + k) * 0.04)))
+        * smoothstep(-0.8, 1.0, pFar.y);
       col += vec3(0.95, 0.95, 1.10) * fork * flash * 2.5;
     }
   `,

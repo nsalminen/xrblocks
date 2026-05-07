@@ -22,32 +22,41 @@ export const LavaScene = {
   `,
 
   body: /* glsl */ `
+    // Stereo parallax layers.
+    vec2 pFar  = parallaxP(p, rd, 0.35);
+    vec2 pBack = parallaxP(p, rd, 0.22);
+    vec2 pMid  = parallaxP(p, rd, 0.12);
+    vec2 pNear = parallaxP(p, rd, 0.04);
+
     // ---- Sky: smoky red/orange gradient ----
-    float sky = smoothstep(-0.4, 1.0, p.y);
+    float sky = smoothstep(-0.4, 1.0, pFar.y);
     vec3 high = vec3(0.20, 0.05, 0.15);
     vec3 mid  = vec3(0.55, 0.15, 0.10);
     vec3 low  = vec3(0.95, 0.45, 0.15);
-    col = mix(low, mid, smoothstep(-0.4, 0.4, p.y));
-    col = mix(col, high, smoothstep(0.4, 1.0, p.y));
+    col = mix(low, mid, smoothstep(-0.4, 0.4, pFar.y));
+    col = mix(col, high, smoothstep(0.4, 1.0, pFar.y));
 
     // Drifting ash clouds in the sky.
-    float ash = fbm(vec2(p.x * 2.0 + uTime * 0.05, p.y * 2.5));
-    ash *= smoothstep(-0.2, 1.0, p.y);
+    float ash = fbm(vec2(pFar.x * 2.0 + uTime * 0.05, pFar.y * 2.5));
+    ash *= smoothstep(-0.2, 1.0, pFar.y);
     col = mix(col, vec3(0.10, 0.05, 0.10), ash * 0.55);
 
     // Faint distant stars / sparks visible through the haze.
-    float spark = starsLayer(vUv * 2.0 + vec2(uTime * 0.02, 0.0), 80.0, 0.992);
-    col += vec3(1.0, 0.8, 0.5) * spark * 0.6;
+    {
+      vec2 uvFar = pFar * 0.5 + 0.5;
+      float spark = starsLayer(uvFar * 2.0 + vec2(uTime * 0.02, 0.0), 80.0, 0.992);
+      col += vec3(1.0, 0.8, 0.5) * spark * 0.6;
+    }
 
     // ---- Distant volcano on the horizon (centered) ----
     vec2 volcCenter = vec2(0.0, -0.4);
     float volcW = 0.8;
     float volcH = 0.55;
-    float volc = volcanoMask(p, volcCenter, volcW, volcH);
+    float volc = volcanoMask(pBack, volcCenter, volcW, volcH);
     if (volc > 0.0) {
       // Dark rocky body with occasional glowing cracks.
       vec3 rock = vec3(0.10, 0.05, 0.04);
-      float cracks = ridgedFbm(vec2(p.x * 18.0, p.y * 22.0));
+      float cracks = ridgedFbm(vec2(pBack.x * 18.0, pBack.y * 22.0));
       cracks = smoothstep(0.55, 0.85, cracks);
       vec3 lavaCrack = vec3(1.00, 0.45, 0.10);
       col = mix(rock, lavaCrack, cracks * 0.6);
@@ -55,26 +64,26 @@ export const LavaScene = {
 
     // ---- Lava river running across the foreground ----
     {
-      float riverY = -0.65 + sin(p.x * 3.0 + uTime * 0.3) * 0.04;
-      float riverBand = smoothstep(0.18, 0.0, abs(p.y - riverY))
-                      * step(p.y, -0.45);
+      float riverY = -0.65 + sin(pNear.x * 3.0 + uTime * 0.3) * 0.04;
+      float riverBand = smoothstep(0.18, 0.0, abs(pNear.y - riverY))
+                      * step(pNear.y, -0.45);
       // Flowing texture along x.
-      float flow = fbm(vec2(p.x * 6.0 - uTime * 0.6, p.y * 8.0));
-      float flow2 = fbm(vec2(p.x * 14.0 - uTime * 1.2, p.y * 16.0));
+      float flow = fbm(vec2(pNear.x * 6.0 - uTime * 0.6, pNear.y * 8.0));
+      float flow2 = fbm(vec2(pNear.x * 14.0 - uTime * 1.2, pNear.y * 16.0));
       vec3 lavaCol = mix(vec3(1.00, 0.85, 0.20),
                          vec3(0.95, 0.30, 0.05), flow);
       lavaCol = mix(lavaCol, vec3(0.20, 0.05, 0.02),
                     smoothstep(0.55, 0.85, flow2) * 0.8);
       col = mix(col, lavaCol * 1.6, riverBand);
       // Heat haze glow around it.
-      float glow = smoothstep(0.30, 0.0, abs(p.y - riverY)) * step(p.y, -0.30);
+      float glow = smoothstep(0.30, 0.0, abs(pNear.y - riverY)) * step(pNear.y, -0.30);
       col += vec3(1.0, 0.45, 0.10) * glow * 0.35;
     }
 
     // ---- Glowing crater pulse (volcano top) ----
     {
       float craterY = volcCenter.y + volcH;
-      float craterDist = length(vec2(p.x * 1.2, p.y - craterY));
+      float craterDist = length(vec2(pBack.x * 1.2, pBack.y - craterY));
       float pulse = 0.7 + 0.3 * sin(uTime * 2.0);
       float craterGlow = smoothstep(0.20, 0.0, craterDist) * pulse;
       col += vec3(1.0, 0.55, 0.10) * craterGlow * 1.2;
@@ -91,7 +100,7 @@ export const LavaScene = {
         float bx = (hash(vec2(fi, 1.7)) - 0.5) * 1.6
                  + sin(life * 2.0 + fi) * 0.05;
         float by = -0.7 + life * 0.6;
-        vec2 d = p - vec2(bx, by);
+        vec2 d = pNear - vec2(bx, by);
         float dr = length(d);
         float ember = smoothstep(0.012, 0.0, dr);
         // Color cools as it rises.
@@ -106,7 +115,7 @@ export const LavaScene = {
     // ---- Volcanic ash plume rising from crater (always on) ----
     {
       vec2 plumeCenter = vec2(0.0, volcCenter.y + volcH);
-      vec2 dp = p - plumeCenter;
+      vec2 dp = pBack - plumeCenter;
       // Plume fans out as it rises.
       float widen = max(dp.y, 0.0) * 0.6 + 0.05;
       float plumeMask = smoothstep(widen, widen * 0.6, abs(dp.x))
@@ -128,11 +137,11 @@ export const LavaScene = {
       float local = uTime - k * cycle;
       float blast = smoothstep(0.0, 0.2, local) * smoothstep(2.5, 0.3, local);
       vec2 cr = vec2(0.0, volcCenter.y + volcH);
-      float dr = length(p - cr);
+      float dr = length(pBack - cr);
       // Bright dome expanding out of crater.
       float dome = smoothstep(0.0, 1.5, local) * 0.5;
       float front = smoothstep(0.04, 0.0, abs(dr - dome))
-                  * step(0.0, p.y - cr.y);
+                  * step(0.0, pBack.y - cr.y);
       col += vec3(1.0, 0.75, 0.30) * front * blast * 2.0;
       // Bright flash on whole crater.
       float flash = smoothstep(0.4, 0.0, dr) * blast;
@@ -157,7 +166,7 @@ export const LavaScene = {
           if (u <= 1.0) {
             vec2 pos = mix(c0, c1, u);
             pos.y += sin(u * 3.14159) * (0.35 + fi * 0.05);
-            float dr = length(p - pos);
+            float dr = length(pMid - pos);
             float bomb = smoothstep(0.02, 0.0, dr);
             col += vec3(1.0, 0.85, 0.30) * bomb * 2.5;
             // Trailing smoke.
@@ -167,7 +176,7 @@ export const LavaScene = {
               if (u2 > 0.0) {
                 vec2 pos2 = mix(c0, c1, u2);
                 pos2.y += sin(u2 * 3.14159) * (0.35 + fi * 0.05);
-                float td = length(p - pos2);
+                float td = length(pMid - pos2);
                 float trail = smoothstep(0.012 + fj * 0.003, 0.0, td);
                 col += vec3(0.85, 0.45, 0.20) * trail * (1.0 - fj * 0.15);
               }
@@ -196,11 +205,11 @@ export const LavaScene = {
         float fi = float(i) / 6.0;
         vec2 ptN = mix(startB, endB, fi);
         ptN.x += (hash(vec2(k, fi * 31.0 + 7.7)) - 0.5) * 0.06;
-        // Distance from p to segment prev->ptN.
+        // Distance from pBack to segment prev->ptN.
         vec2 seg = ptN - prev;
-        float tSeg = clamp(dot(p - prev, seg) / dot(seg, seg), 0.0, 1.0);
+        float tSeg = clamp(dot(pBack - prev, seg) / dot(seg, seg), 0.0, 1.0);
         vec2 closest = prev + seg * tSeg;
-        boltDist = min(boltDist, length(p - closest));
+        boltDist = min(boltDist, length(pBack - closest));
         prev = ptN;
       }
       float bolt = smoothstep(0.008, 0.0, boltDist);
@@ -216,7 +225,7 @@ export const LavaScene = {
       float k = floor(uTime / cycle);
       float local = uTime - k * cycle;
       vec2 cr = vec2(0.0, volcCenter.y + volcH);
-      float dr = length(p - cr);
+      float dr = length(pBack - cr);
       float radius = local * 0.35;
       float shock = smoothstep(0.04, 0.0, abs(dr - radius))
                   * smoothstep(4.0, 0.5, local)

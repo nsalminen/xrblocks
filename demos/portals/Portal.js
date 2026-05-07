@@ -188,6 +188,12 @@ export class Portal extends THREE.Object3D {
           float twinkle = 0.5 + 0.5 * sin(uTime * (2.0 + h * 6.0) + h * 30.0);
           return smoothstep(0.05, 0.0, d) * (0.5 + twinkle * 0.5);
         }
+        // Parallax offset for layered stereo depth.
+        // depthBehindP: 0 = on disc surface, positive = behind disc (p-space units).
+        vec2 parallaxP(vec2 uv, vec3 rayDir, float depthBehindP) {
+          return uv + rayDir.xy * depthBehindP / max(-rayDir.z, 0.3);
+        }
+
         float raySphere(vec3 ro, vec3 rd, vec3 c, float rad) {
           vec3 oc = ro - c;
           float b = dot(oc, rd);
