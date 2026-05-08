@@ -37,9 +37,86 @@ export const CyberpunkScene = {
           flickerOn);
       return lit * win * flicker;
     }
+
+    // Ray-AABB intersection.
+    float rayBoxC(vec3 ro, vec3 rd, vec3 ctr, vec3 hsz, out vec3 nrm) {
+      vec3 m = 1.0 / rd;
+      vec3 oc = ctr - ro;
+      vec3 t1 = (oc - hsz) * m;
+      vec3 t2 = (oc + hsz) * m;
+      vec3 tmin = min(t1, t2);
+      vec3 tmax = max(t1, t2);
+      float tNear = max(max(tmin.x, tmin.y), tmin.z);
+      float tFar = min(min(tmax.x, tmax.y), tmax.z);
+      if (tNear > tFar || tFar < 0.0) return -1.0;
+      if (tNear == tmin.x) nrm = vec3(-sign(rd.x), 0.0, 0.0);
+      else if (tNear == tmin.y) nrm = vec3(0.0, -sign(rd.y), 0.0);
+      else nrm = vec3(0.0, 0.0, -sign(rd.z));
+      return tNear;
+    }
+
+    // 3D ring of skyscraper boxes around the user.
+    vec4 cityRing3D(vec3 ro, vec3 rd, float t) {
+      float bestT = 1e9;
+      vec3 bestCol = vec3(0.0);
+      for (int i = 0; i < 14; i++) {
+        float fi = float(i);
+        float seed = fi + 19.0;
+        float ang = fi * (6.28318 / 14.0)
+                  + (hash(vec2(seed, 0.7)) - 0.5) * 0.15;
+        float dist = 18.0 + hash(vec2(seed, 1.7)) * 14.0;
+        vec3 base = vec3(cos(ang) * dist, -1.6, sin(ang) * dist);
+        float bw = 2.5 + hash(vec2(seed, 2.7)) * 2.5;
+        float bd = 2.5 + hash(vec2(seed, 3.7)) * 2.5;
+        float bh = 8.0 + hash(vec2(seed, 4.7)) * 18.0;
+        vec3 hsz = vec3(bw, bh * 0.5, bd);
+        vec3 ctr = base + vec3(0.0, bh * 0.5, 0.0);
+        vec3 nrm;
+        float th = rayBoxC(ro, rd, ctr, hsz, nrm);
+        if (th > 0.5 && th < bestT) {
+          bestT = th;
+          vec3 hp = ro + rd * th - ctr;
+          vec2 uv = vec2(0.0);
+          float isSide = 1.0 - step(0.5, abs(nrm.y));
+          if (abs(nrm.x) > 0.5) {
+            uv = vec2((hp.z + bd) / (2.0 * bd),
+                       (hp.y + bh * 0.5) / bh);
+          } else if (abs(nrm.z) > 0.5) {
+            uv = vec2((hp.x + bw) / (2.0 * bw),
+                       (hp.y + bh * 0.5) / bh);
+          }
+          vec2 grid = vec2(6.0, 16.0);
+          vec2 cell = uv * grid;
+          vec2 fc = fract(cell);
+          vec2 ic = floor(cell);
+          float lit = step(0.55, hash(ic + seed));
+          float win = step(0.18, fc.x) * step(fc.x, 0.82)
+                    * step(0.20, fc.y) * step(fc.y, 0.85);
+          float flickerOn = step(0.92, hash(ic + seed + 7.7));
+          float flicker = mix(1.0,
+              0.5 + 0.5 * sin(t * 6.0 + ic.x + ic.y),
+              flickerOn);
+          float winMask = lit * win * flicker * isSide;
+          float colorRoll = hash(vec2(seed, 33.7));
+          vec3 wc;
+          if (colorRoll < 0.5) wc = vec3(1.00, 0.85, 0.50);
+          else if (colorRoll < 0.75) wc = vec3(0.20, 0.95, 1.00);
+          else wc = vec3(1.00, 0.30, 0.80);
+          vec3 buildingBase = vec3(0.020, 0.015, 0.035)
+                            + vec3(0.06, 0.02, 0.08);
+          vec3 c = buildingBase + wc * winMask * 1.5;
+          float topMask = step(0.5, nrm.y);
+          c += vec3(1.0, 0.30, 0.55) * topMask
+             * (0.4 + 0.3 * sin(t * 3.0 + seed * 7.0));
+          bestCol = c;
+        }
+      }
+      return vec4(bestCol, bestT);
+    }
   `,
 
   body: /* glsl */ `
+    vec3 ro = uCamLocal;
     // Stereo parallax layers.
     vec2 pFar  = parallaxP(p, rd, 0.35);
     vec2 pBack = parallaxP(p, rd, 0.22);
@@ -57,39 +134,11 @@ export const CyberpunkScene = {
     float smog = fbm(vec2(pFar.x * 2.0 + uTime * 0.05, pFar.y * 2.0));
     col = mix(col, vec3(0.35, 0.10, 0.40), smog * smoothstep(0.0, 0.6, pFar.y) * 0.4);
 
-    // ---- City skyline: layered buildings with windows ----
-    // Back layer (distant, hazy purple).
-    {
-      for (int i = 0; i < 12; i++) {
-        float fi = float(i);
-        float cx = (fi - 5.5) * 0.20 + sin(fi * 2.7) * 0.04;
-        float w  = 0.05 + hash(vec2(fi, 1.7)) * 0.025;
-        float h  = 0.45 + hash(vec2(fi, 4.3)) * 0.20;
-        float baseY = -0.5;
-        float b = buildingMask(pBack, cx, w, h, baseY);
-        col = mix(col, vec3(0.10, 0.05, 0.20), b * 0.7);
-        // Faint window lights.
-        float win = windowsAt(pBack, cx, w, h, baseY, fi);
-        col = mix(col, vec3(0.85, 0.55, 0.95), win * 0.5);
-      }
-    }
-    // Mid layer (taller, dark, brighter windows).
-    {
-      for (int i = 0; i < 7; i++) {
-        float fi = float(i);
-        float cx = (fi - 3.0) * 0.32 + sin(fi * 4.1) * 0.06;
-        float w  = 0.08 + hash(vec2(fi, 11.7)) * 0.03;
-        float h  = 0.65 + hash(vec2(fi, 24.3)) * 0.25;
-        float baseY = -0.7;
-        float b = buildingMask(pMid, cx, w, h, baseY);
-        col = mix(col, vec3(0.02, 0.03, 0.08), b);
-        // Bright neon windows.
-        float win = windowsAt(pMid, cx, w, h, baseY, fi + 100.0);
-        vec3 winCol = mix(vec3(0.20, 0.95, 1.00),
-                          vec3(1.00, 0.30, 0.65),
-                          hash(vec2(fi, 33.7)));
-        col = mix(col, winCol, win);
-      }
+    // ---- 3D raycast city ring (parallaxes correctly) ----
+    vec4 cityHit = cityRing3D(ro, rd, uTime);
+    if (cityHit.w < 1e8) {
+      float fogF = smoothstep(8.0, 50.0, cityHit.w);
+      col = mix(cityHit.rgb, col, fogF * 0.4);
     }
 
     // ---- Neon signs glowing on the buildings ----

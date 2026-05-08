@@ -42,9 +42,9 @@ export class CyberpunkImmersive extends THREE.Object3D {
         this._entryMatrix
       );
       const portalQuatInv = portalQuat.clone().invert();
-      const camQuat = camera.getWorldQuaternion(new THREE.Quaternion());
-      const localQuat = portalQuatInv.multiply(camQuat);
-      const rotMat4 = new THREE.Matrix4().makeRotationFromQuaternion(localQuat);
+      const rotMat4 = new THREE.Matrix4().makeRotationFromQuaternion(
+        portalQuatInv
+      );
       mat.uniforms.uViewRotation.value.setFromMatrix4(rotMat4);
     }
 
@@ -183,6 +183,133 @@ export class CyberpunkImmersive extends THREE.Object3D {
           return hit;
         }
 
+        // Ray-AABB intersection. Returns nearest positive t and normal.
+        // Returns -1 if no hit.
+        float rayBox(vec3 ro, vec3 rd, vec3 ctr, vec3 hsz,
+                      out vec3 nrm) {
+          vec3 m = 1.0 / rd;
+          vec3 oc = ctr - ro;
+          vec3 t1 = (oc - hsz) * m;
+          vec3 t2 = (oc + hsz) * m;
+          vec3 tmin = min(t1, t2);
+          vec3 tmax = max(t1, t2);
+          float tNear = max(max(tmin.x, tmin.y), tmin.z);
+          float tFar = min(min(tmax.x, tmax.y), tmax.z);
+          if (tNear > tFar || tFar < 0.0) return -1.0;
+          if (tNear == tmin.x) nrm = vec3(-sign(rd.x), 0.0, 0.0);
+          else if (tNear == tmin.y) nrm = vec3(0.0, -sign(rd.y), 0.0);
+          else nrm = vec3(0.0, 0.0, -sign(rd.z));
+          return tNear;
+        }
+
+        // 3D ring of skyscraper boxes. Returns vec4(rgb, t).
+        vec4 cityRing3D(vec3 ro, vec3 rd, float t) {
+          float bestT = 1e9;
+          vec3 bestCol = vec3(0.0);
+          for (int i = 0; i < 14; i++) {
+            float fi = float(i);
+            float seed = fi + 19.0;
+            float ang = fi * (6.28318 / 14.0)
+                      + (hash(vec2(seed, 0.7)) - 0.5) * 0.15;
+            float dist = 18.0 + hash(vec2(seed, 1.7)) * 14.0;
+            vec3 base = vec3(cos(ang) * dist, -1.6, sin(ang) * dist);
+            float w = 2.5 + hash(vec2(seed, 2.7)) * 2.5;
+            float d = 2.5 + hash(vec2(seed, 3.7)) * 2.5;
+            float h = 8.0 + hash(vec2(seed, 4.7)) * 18.0;
+            vec3 hsz = vec3(w, h * 0.5, d);
+            vec3 ctr = base + vec3(0.0, h * 0.5, 0.0);
+            vec3 nrm;
+            float th = rayBox(ro, rd, ctr, hsz, nrm);
+            if (th > 0.5 && th < bestT) {
+              bestT = th;
+              vec3 hp = ro + rd * th - ctr;
+              // Pick window UV based on hit face.
+              vec2 uv = vec2(0.0);
+              float isSide = 1.0 - step(0.5, abs(nrm.y));
+              if (abs(nrm.x) > 0.5) {
+                uv = vec2((hp.z + d) / (2.0 * d),
+                           (hp.y + h * 0.5) / h);
+              } else if (abs(nrm.z) > 0.5) {
+                uv = vec2((hp.x + w) / (2.0 * w),
+                           (hp.y + h * 0.5) / h);
+              }
+              vec2 grid = vec2(6.0, 16.0);
+              vec2 cell = uv * grid;
+              vec2 fc = fract(cell);
+              vec2 ic = floor(cell);
+              float lit = step(0.55, hash(ic + seed));
+              float win = step(0.18, fc.x) * step(fc.x, 0.82)
+                        * step(0.20, fc.y) * step(fc.y, 0.85);
+              float flickerOn = step(0.92, hash(ic + seed + 7.7));
+              float flicker = mix(1.0,
+                  0.5 + 0.5 * sin(t * 6.0 + ic.x + ic.y),
+                  flickerOn);
+              float winMask = lit * win * flicker * isSide;
+              float colorRoll = hash(vec2(seed, 33.7));
+              vec3 wc;
+              if (colorRoll < 0.5) wc = vec3(1.00, 0.85, 0.50);
+              else if (colorRoll < 0.75) wc = vec3(0.20, 0.95, 1.00);
+              else wc = vec3(1.00, 0.30, 0.80);
+              vec3 buildingBase = vec3(0.020, 0.015, 0.035)
+                                + vec3(0.06, 0.02, 0.08);
+              vec3 c = buildingBase + wc * winMask * 1.5;
+              // Antenna glow on top face.
+              float topMask = step(0.5, nrm.y);
+              c += vec3(1.0, 0.30, 0.55) * topMask
+                 * (0.4 + 0.3 * sin(t * 3.0 + seed * 7.0));
+              bestCol = c;
+            }
+          }
+          return vec4(bestCol, bestT);
+        }
+
+        // Holographic neon billboard slabs at fixed positions.
+        vec4 neonBillboards(vec3 ro, vec3 rd, float t) {
+          float bestT = 1e9;
+          vec3 bestCol = vec3(0.0);
+          for (int i = 0; i < 3; i++) {
+            float fi = float(i);
+            float ang = fi * 2.094 + 0.5;
+            float dist = 8.0 + fi * 1.5;
+            vec3 ctr = vec3(cos(ang) * dist, 2.5 + fi * 0.8,
+                             sin(ang) * dist);
+            vec3 hsz = vec3(2.0, 1.2, 0.08);
+            // Orient slab to face inward (rotate hsz xz by ang).
+            // Use AABB approximation: swap x/z for slabs roughly perpendicular
+            // to the radial direction.
+            if (abs(cos(ang)) < abs(sin(ang))) hsz = vec3(0.08, 1.2, 2.0);
+            vec3 nrm;
+            float th = rayBox(ro, rd, ctr, hsz, nrm);
+            if (th > 0.5 && th < bestT) {
+              bestT = th;
+              vec3 hp = ro + rd * th - ctr;
+              vec2 uv = vec2(hp.x / hsz.x, hp.y / hsz.y) * 0.5 + 0.5;
+              if (hsz.x < 0.2) uv = vec2(hp.z / hsz.z, hp.y / hsz.y) * 0.5
+                                  + 0.5;
+              float scan = 0.5 + 0.5 * sin(uv.y * 80.0 + t * 8.0);
+              float flicker = 0.7 + 0.3 * sin(t * 18.0 + fi);
+              vec3 base = vec3(0.0);
+              if (i == 0) base = vec3(1.00, 0.30, 0.80);
+              else if (i == 1) base = vec3(0.20, 0.95, 1.00);
+              else base = vec3(1.00, 0.75, 0.20);
+              float shape = smoothstep(0.05, 0.10, uv.x)
+                          * smoothstep(0.05, 0.10, 1.0 - uv.x)
+                          * smoothstep(0.10, 0.20, uv.y)
+                          * smoothstep(0.10, 0.20, 1.0 - uv.y);
+              bestCol = base * (0.7 + scan * 0.5) * flicker * shape * 1.4;
+            }
+          }
+          return vec4(bestCol, bestT);
+        }
+
+        float raySphere(vec3 ro, vec3 rd, vec3 c, float rad) {
+          vec3 oc = ro - c;
+          float b = dot(oc, rd);
+          float d = b * b - (dot(oc, oc) - rad * rad);
+          if (d < 0.0) return -1.0;
+          return -b - sqrt(d);
+        }
+
         // Hover-car streaks: thin horizontal bright lines crossing the sky.
         vec3 hoverCars(vec3 rd, float t) {
           vec3 col = vec3(0.0);
@@ -311,17 +438,22 @@ export class CyberpunkImmersive extends THREE.Object3D {
           col = mix(col, vec3(0.20, 0.05, 0.18),
                     smog * smoothstep(0.0, 0.3, rd.y) * 0.5);
 
-          // ---- Ring of skyscraper silhouettes ----
-          BuildingHit b = cityRing(rd, t);
-          if (b.mask > 0.5) {
-            vec3 buildingCol = vec3(0.020, 0.015, 0.035);
-            // Backlit edge tint
-            buildingCol += vec3(0.06, 0.02, 0.08);
-            // Apply windows.
-            vec3 lit = b.windowCol * b.windowMask * 1.5;
-            col = buildingCol + lit;
-            // Top antenna glow.
-            col += vec3(1.00, 0.30, 0.55) * b.topGlow * 0.4;
+          // ---- 3D raycast city ring (parallaxes correctly) ----
+          float opaqueT = 1e9;
+          vec3 opaqueCol = vec3(0.0);
+          vec4 cityHit = cityRing3D(ro, rd, t);
+          if (cityHit.w < opaqueT) {
+            opaqueT = cityHit.w;
+            opaqueCol = cityHit.rgb;
+          }
+          vec4 boardHit = neonBillboards(ro, rd, t);
+          if (boardHit.w < opaqueT) {
+            opaqueT = boardHit.w;
+            opaqueCol = boardHit.rgb;
+          }
+          if (opaqueT < 1e8) {
+            float fogF = smoothstep(8.0, 50.0, opaqueT);
+            col = mix(opaqueCol, col, fogF * 0.4);
           }
 
           // ---- Hover-car streaks ----
@@ -335,10 +467,12 @@ export class CyberpunkImmersive extends THREE.Object3D {
 
           // ---- Wet street (looking down) ----
           if (rd.y < 0.0) {
-            vec3 streetCol = wetStreet(ro, rd, t);
-            // Replace sky/building color below horizon.
-            float weight = smoothstep(0.0, -0.05, rd.y);
-            col = mix(col, streetCol, weight);
+            float gt = -ro.y / rd.y;
+            if (gt > 0.0 && gt < opaqueT) {
+              vec3 streetCol = wetStreet(ro, rd, t);
+              float weight = smoothstep(0.0, -0.05, rd.y);
+              col = mix(col, streetCol, weight);
+            }
           }
 
           // Atmospheric magenta lift.
