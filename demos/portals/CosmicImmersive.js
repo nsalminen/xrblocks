@@ -151,6 +151,18 @@ export class CosmicImmersive extends THREE.Object3D {
           }
           return v;
         }
+        float ridgedFbm(vec2 p) {
+          float v = 0.0; float a = 0.5;
+          for (int i = 0; i < 4; i++) {
+            float n = 1.0 - abs(noise(p) * 2.0 - 1.0);
+            v += a * n * n; p *= 2.13; a *= 0.5;
+          }
+          return v;
+        }
+        float warpedFbm(vec2 p) {
+          vec2 q = vec2(fbm(p), fbm(p + vec2(5.2, 1.3)));
+          return fbm(p + 4.0 * q);
+        }
 
         float starsLayer(vec3 rd, float density, float threshold) {
           // Use octahedral mapping for seamless 2D grid on a sphere.
@@ -193,21 +205,49 @@ export class CosmicImmersive extends THREE.Object3D {
           float forwardness = max(-rd.z, 0.0);
           vec2 p = rd.xy / max(-rd.z, 0.15);
 
-          // ---- Nebula background (3D noise on direction, no UV seam) ----
-          vec3 nDir = rd * 2.8;
-          float n1 = warpedFbm3(nDir * 1.0 + vec3(uTime * 0.03, -uTime * 0.02, uTime * 0.01));
-          float n2 = fbm3(nDir * 2.8 - vec3(uTime * 0.05, uTime * 0.04, -uTime * 0.03));
-          float n3 = ridgedFbm3(nDir * 4.0 + vec3(-uTime * 0.04, uTime * 0.03, uTime * 0.02));
-          float density = pow(n1 * 0.55 + n2 * 0.45, 1.6);
-          float wisps = pow(n3, 2.2);
+          // ---- Nebula background (depth-layered 3D noise for volume) ----
           vec3 nebulaA = vec3(0.05, 0.08, 0.30);
           vec3 nebulaB = vec3(0.55, 0.18, 0.70);
           vec3 nebulaC = vec3(0.95, 0.45, 0.25);
           vec3 nebulaD = vec3(0.35, 0.85, 1.00);
-          vec3 col = mix(nebulaA, nebulaB, smoothstep(0.15, 0.7, n1));
-          col = mix(col, nebulaC, smoothstep(0.55, 1.0, n2) * 0.9);
-          col = mix(col, nebulaD, wisps * 0.6);
-          col *= 0.15 + density * 2.4;
+          vec3 col = vec3(0.005, 0.005, 0.02);
+          // Near layer (depth 1.5) — large soft structures
+          {
+            vec3 nDir = rd * 1.5;
+            float ln1 = warpedFbm3(nDir + vec3(uTime * 0.03, -uTime * 0.02, uTime * 0.01));
+            float ln2 = fbm3(nDir * 2.8 - vec3(uTime * 0.05, uTime * 0.04, -uTime * 0.03));
+            float ld = pow(ln1 * 0.55 + ln2 * 0.45, 1.6);
+            vec3 lc = mix(nebulaA, nebulaB, smoothstep(0.15, 0.7, ln1));
+            lc = mix(lc, nebulaC, smoothstep(0.55, 1.0, ln2) * 0.9);
+            lc *= 0.15 + ld * 2.4;
+            col = mix(col, lc, ld * 0.35);
+          }
+          // Mid layer (depth 2.8) — primary detail
+          {
+            vec3 nDir = rd * 2.8;
+            float mn1 = warpedFbm3(nDir + vec3(uTime * 0.03, -uTime * 0.02, uTime * 0.01));
+            float mn2 = fbm3(nDir * 2.8 - vec3(uTime * 0.05, uTime * 0.04, -uTime * 0.03));
+            float mn3 = ridgedFbm3(nDir * 4.0 + vec3(-uTime * 0.04, uTime * 0.03, uTime * 0.02));
+            float mDensity = pow(mn1 * 0.55 + mn2 * 0.45, 1.6);
+            float mWisps = pow(mn3, 2.2);
+            vec3 mc = mix(nebulaA, nebulaB, smoothstep(0.15, 0.7, mn1));
+            mc = mix(mc, nebulaC, smoothstep(0.55, 1.0, mn2) * 0.9);
+            mc = mix(mc, nebulaD, mWisps * 0.6);
+            mc *= 0.15 + mDensity * 2.4;
+            col = mix(col, mc, clamp(mDensity * 0.7, 0.0, 1.0));
+          }
+          // Far layer (depth 5.0) — distant haze
+          {
+            vec3 nDir = rd * 5.0;
+            float fn1 = fbm3(nDir * 1.2 + vec3(uTime * 0.02, -uTime * 0.015, uTime * 0.01));
+            float fn3 = ridgedFbm3(nDir * 3.0 + vec3(-uTime * 0.03, uTime * 0.02, uTime * 0.015));
+            float fDensity = pow(fn1, 1.8);
+            float fWisps = pow(fn3, 2.2);
+            vec3 fc = mix(nebulaA, nebulaB, smoothstep(0.2, 0.75, fn1));
+            fc = mix(fc, nebulaD, fWisps * 0.5);
+            fc *= 0.1 + fDensity * 1.8;
+            col = mix(col, fc, clamp(fDensity * 0.4, 0.0, 1.0));
+          }
           col = mix(vec3(0.005, 0.005, 0.02), col, 0.92);
 
           // ---- Stars (octahedral mapping, no seam) ----
@@ -241,16 +281,21 @@ export class CosmicImmersive extends THREE.Object3D {
           vec3 lightDirPlanet = normalize(sunPos - planetPos);
           vec3 lightDirMoon   = normalize(sunPos - moonPos);
           vec3 lightDirGas    = normalize(sunPos - gasPos);
+          vec3 limbCenter = vec3(3.5, -5.5, -3.5) * sc;
+          float limbRadius = 5.5 * sc;
+          vec3 lightDirLimb = normalize(sunPos - limbCenter);
 
           float tBest = 1e9; int hitId = 0;
           float tP = raySphere(ro, rd, planetPos, planetRad);
           float tM = raySphere(ro, rd, moonPos, moonRad);
           float tS = raySphere(ro, rd, sunPos, sunRad);
           float tG = raySphere(ro, rd, gasPos, gasRad);
+          float tLB = raySphere(ro, rd, limbCenter, limbRadius);
           if (tP > 0.0 && tP < tBest) { tBest = tP; hitId = 1; }
           if (tM > 0.0 && tM < tBest) { tBest = tM; hitId = 2; }
           if (tS > 0.0 && tS < tBest) { tBest = tS; hitId = 3; }
           if (tG > 0.0 && tG < tBest) { tBest = tG; hitId = 4; }
+          if (tLB > 0.0 && tLB < tBest) { tBest = tLB; hitId = 5; }
 
           // Saturn-style ring around gas giant.
           float rt = 0.55;
@@ -291,7 +336,47 @@ export class CosmicImmersive extends THREE.Object3D {
             }
           }
 
-          // Sun glow + corona.
+          // Horizon gas-giant limb ring.
+          {
+            vec3 limbRingN = normalize(vec3(-0.25, 0.90, 0.15));
+            float lrd = dot(rd, limbRingN);
+            if (abs(lrd) > 1e-3) {
+              float tLR = dot(limbCenter - ro, limbRingN) / lrd;
+              if (tLR > 0.0) {
+                bool behindLimb = (tLB > 0.0 && tLR > tLB);
+                bool behindObj = (hitId != 5 && hitId > 0 && tLR > tBest);
+                if (!behindLimb && !behindObj) {
+                  vec3 rp = ro + rd * tLR - limbCenter;
+                  float rr = length(rp);
+                  float lInner = limbRadius * 1.15;
+                  float lOuter = limbRadius * 1.8;
+                  if (rr > lInner && rr < lOuter) {
+                    float u = (rr - lInner) / (lOuter - lInner);
+                    float ang = atan(rp.z, rp.x) + t * 0.03;
+                    float rb = fbm(vec2(u * 50.0, 0.0)) * 0.5
+                             + fbm(vec2(u * 150.0, 5.1)) * 0.3
+                             + fbm(vec2(u * 350.0, 2.2)) * 0.2;
+                    rb = smoothstep(0.25, 0.75, rb);
+                    float rGap1 = smoothstep(0.40, 0.43, u) - smoothstep(0.43, 0.47, u);
+                    float rGap2 = smoothstep(0.65, 0.67, u) - smoothstep(0.67, 0.70, u);
+                    rb *= 1.0 - clamp(rGap1 + rGap2, 0.0, 1.0);
+                    float rDust = fbm(vec2(ang * 50.0, u * 25.0));
+                    rb *= 0.5 + rDust * 0.7;
+                    rb *= smoothstep(0.0, 0.05, u) * smoothstep(1.0, 0.95, u);
+                    vec3 lrCol = mix(vec3(0.95, 0.80, 0.50),
+                                     vec3(0.85, 0.90, 1.05), u);
+                    vec3 lrHit = ro + rd * tLR;
+                    vec3 toL = normalize(sunPos - lrHit);
+                    float shT = raySphere(lrHit, toL, limbCenter, limbRadius * 1.01);
+                    float shade = (shT > 0.0) ? 0.30 : 1.0;
+                    col += lrCol * rb * shade * 1.4;
+                  }
+                }
+              }
+            }
+          }
+
+          // Sun glow + corona + flare.
           {
             float breathe = 0.85 + 0.15 * sin(t * 0.6);
             vec3 oc = ro - sunPos;
@@ -306,6 +391,11 @@ export class CosmicImmersive extends THREE.Object3D {
                          * (0.5 + 0.5 * fbm(vec2(angSun * 4.0, t * 0.3 + coronaR)));
             col += vec3(1.0, 0.85, 0.55) * halo * 0.9 * breathe;
             col += vec3(1.0, 0.55, 0.20) * corona * 0.45;
+            float flarePhase = mod(t, 11.0) / 11.0;
+            float flareEnv = smoothstep(0.0, 0.05, flarePhase)
+                           * smoothstep(0.35, 0.10, flarePhase);
+            col += vec3(1.0, 0.7, 0.3)
+                 * smoothstep(2.0, 0.6, coronaR) * flareEnv * 1.2;
           }
 
           // Planet shading.
@@ -357,6 +447,26 @@ export class CosmicImmersive extends THREE.Object3D {
             float rim = pow(1.0 - max(dot(n, -rd), 0.0), 2.5);
             col = base * (0.35 + lambert * 0.95)
                 + vec3(1.0, 0.75, 0.55) * rim * 0.55;
+          } else if (hitId == 5) {
+            vec3 hp = ro + rd * tBest;
+            vec3 n = normalize(hp - limbCenter);
+            float lon = atan(n.z, n.x) + t * 0.02;
+            float lat = asin(clamp(n.y, -1.0, 1.0));
+            float bandN = fbm(vec2(lat * 8.0, lon * 0.3 + t * 0.03));
+            float bands = sin(lat * 20.0 + bandN * 4.0) * 0.5 + 0.5;
+            vec3 limbA = vec3(0.85, 0.65, 0.40);
+            vec3 limbB = vec3(0.70, 0.45, 0.25);
+            vec3 limbC = vec3(1.00, 0.88, 0.65);
+            vec3 base = mix(limbA, limbB, bands);
+            base = mix(base, limbC, smoothstep(0.6, 0.9,
+                       fbm(vec2(lon * 1.5 + t * 0.06, lat * 1.5))) * 0.5);
+            float grs = smoothstep(0.35, 0.0,
+                length(vec2(lon - 2.0, lat + 0.15) * vec2(1.0, 1.5)));
+            base = mix(base, vec3(0.85, 0.30, 0.15), grs * 0.6);
+            float lambert = max(dot(n, lightDirLimb), 0.0);
+            float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+            col = base * (0.20 + lambert * 0.80)
+                + vec3(1.0, 0.80, 0.55) * rim * 0.65;
           }
 
           // ---- Comets (forward cone only) ----
@@ -365,6 +475,129 @@ export class CosmicImmersive extends THREE.Object3D {
             col += cosmicComet(p, uTime, 0.13) * fwdMask;
             col += cosmicComet(p, uTime + 2.7, 0.61) * fwdMask;
             col += cosmicComet(p, uTime + 4.1, 0.84) * fwdMask;
+          }
+
+          // ---- Supernova every 22s (forward cone) ----
+          if (fwdMask > 0.0) {
+            float snCycle = 22.0;
+            float snK = floor(uTime / snCycle);
+            float snLocal = uTime - snK * snCycle;
+            vec2 snPos = vec2(hash(vec2(snK, 1.7)) * 1.4 - 0.7,
+                             hash(vec2(snK, 4.3)) * 1.4 - 0.7);
+            vec2 snD = p - snPos;
+            float dSn = length(snD);
+            float snAng = atan(snD.y, snD.x);
+            float flash = smoothstep(0.0, 0.25, snLocal)
+                        * smoothstep(6.0, 0.4, snLocal);
+            float snCore = smoothstep(0.06, 0.0, dSn) * 4.5;
+            float bloom = smoothstep(0.7, 0.0, dSn) * 1.4;
+            vec3 hotCol = mix(vec3(0.7, 0.85, 1.20),
+                              vec3(1.00, 0.95, 0.80), smoothstep(0.0, 1.0, snLocal));
+            hotCol = mix(hotCol, vec3(1.00, 0.55, 0.30),
+                         smoothstep(2.0, 6.0, snLocal));
+            col += hotCol * (snCore + bloom) * flash * fwdMask;
+            float jetAng = hash(vec2(snK, 13.7)) * 6.2832;
+            vec2 jetDir = vec2(cos(jetAng), sin(jetAng));
+            float snAlong = dot(snD, jetDir);
+            float snAcross = dot(snD, vec2(-jetDir.y, jetDir.x));
+            float jetR = smoothstep(0.0, 4.0, snLocal) * 0.6;
+            float jet = smoothstep(0.04, 0.0, abs(snAcross))
+                      * smoothstep(jetR, jetR * 0.05, abs(snAlong));
+            jet *= smoothstep(7.0, 1.5, snLocal);
+            jet *= 0.4 + 0.6 * fbm(vec2(snAlong * 30.0, uTime * 0.6));
+            col += vec3(0.85, 0.95, 1.10) * jet * 0.9 * fwdMask;
+            float ringR = smoothstep(0.0, 6.0, snLocal) * 0.65;
+            float perturb = ridgedFbm(vec2(snAng * 3.0 + snK * 5.0, ringR * 8.0)) * 0.06;
+            float frontDist = abs(dSn - (ringR + perturb));
+            float snWidth = 0.012 + smoothstep(0.0, 6.0, snLocal) * 0.025;
+            float shock = smoothstep(snWidth, 0.0, frontDist);
+            shock *= 0.5 + ridgedFbm(vec2(snAng * 8.0, ringR * 22.0 + uTime * 0.3)) * 1.1;
+            float shockFade = smoothstep(8.0, 1.5, snLocal);
+            col += vec3(1.0, 0.95, 1.0) * shock * shockFade * 1.4 * fwdMask;
+          }
+
+          // ---- Meteor shower every 17s (forward cone) ----
+          if (fwdMask > 0.0) {
+            float msCycle = 17.0;
+            float msK = floor(uTime / msCycle);
+            float msLocal = uTime - msK * msCycle;
+            float burstEnv = smoothstep(0.0, 0.2, msLocal)
+                           * smoothstep(2.5, 0.2, msLocal);
+            if (burstEnv > 0.0) {
+              float msAng = hash(vec2(msK, 9.1)) * 6.2832;
+              vec2 mDir = vec2(cos(msAng), sin(msAng));
+              vec2 mPerp = vec2(-mDir.y, mDir.x);
+              for (int i = 0; i < 7; i++) {
+                float fi = float(i);
+                vec2 origin = vec2(hash(vec2(msK, fi + 11.1)) * 2.0 - 1.0,
+                                   hash(vec2(msK, fi + 23.7)) * 2.0 - 1.0);
+                float speed = 1.6 + hash(vec2(msK, fi + 4.4));
+                vec2 mPos = origin + mDir * (msLocal * speed);
+                vec2 dd = p - mPos;
+                float across2 = dot(dd, mPerp);
+                float along2 = dot(dd, -mDir);
+                float head = smoothstep(0.012, 0.0, length(dd));
+                float tail = smoothstep(0.005, 0.0, abs(across2))
+                           * smoothstep(0.30, 0.0, along2)
+                           * step(0.0, along2);
+                col += vec3(1.0, 0.9, 0.7) * (head * 1.8 + tail * 0.85) * burstEnv * fwdMask;
+              }
+            }
+          }
+
+          // ---- Rocket flyby every 13s (forward cone) ----
+          if (fwdMask > 0.0) {
+            float rCycle = 13.0;
+            float rK = floor(uTime / rCycle);
+            float rLocal = uTime - rK * rCycle;
+            float rLife = smoothstep(0.0, 0.3, rLocal)
+                        * smoothstep(rCycle, rCycle - 1.0, rLocal);
+            float rAng = hash(vec2(rK, 31.7)) * 6.2832;
+            vec2 rDir = vec2(cos(rAng), sin(rAng));
+            vec2 rPerp = vec2(-rDir.y, rDir.x);
+            vec2 rStart = -rDir * 1.6 + rPerp * (hash(vec2(rK, 7.7)) - 0.5);
+            vec2 rPos = rStart + rDir * rLocal * 0.30;
+            vec2 rd2 = p - rPos;
+            float rAlong = dot(rd2, -rDir);
+            float rAcross = dot(rd2, rPerp);
+            float hull = smoothstep(0.055, 0.038, abs(rAlong))
+                       * smoothstep(0.014, 0.0, abs(rAcross));
+            float wing = smoothstep(0.045, 0.0, abs(rAlong + 0.005))
+                       * smoothstep(0.005, 0.0, max(abs(rAcross) - 0.030, 0.0));
+            col += vec3(0.95, 0.97, 1.00) * (hull + wing) * 1.6 * rLife * fwdMask;
+            float plumeAlong = rAlong + 0.060;
+            float plume = smoothstep(0.32, 0.0, plumeAlong) * step(0.0, plumeAlong)
+                        * smoothstep(0.018, 0.0, abs(rAcross));
+            col += vec3(0.30, 0.65, 1.00) * plume * 1.4 * rLife * fwdMask;
+            float plumeCore = plume * smoothstep(0.10, 0.0, plumeAlong);
+            col += vec3(1.00, 0.95, 0.75) * plumeCore * 2.0 * rLife * fwdMask;
+          }
+
+          // ---- Wormhole every 27s (forward cone) ----
+          if (fwdMask > 0.0) {
+            float wCycle = 27.0;
+            float wK = floor(uTime / wCycle);
+            float wLocal = uTime - wK * wCycle;
+            float wOpen = smoothstep(0.0, 2.0, wLocal) * smoothstep(8.0, 5.0, wLocal);
+            if (wOpen > 0.001) {
+              vec2 wPos = vec2(hash(vec2(wK, 71.3)) * 1.2 - 0.6,
+                              hash(vec2(wK, 88.9)) * 1.2 - 0.6);
+              vec2 wd = p - wPos;
+              float wdr = length(wd);
+              float wAng = atan(wd.y, wd.x);
+              float horizon = smoothstep(0.05, 0.045, wdr);
+              col *= 1.0 - horizon * wOpen * fwdMask;
+              float discMask = smoothstep(0.05, 0.06, wdr)
+                             * smoothstep(0.22, 0.10, wdr);
+              float swirl = pow(warpedFbm(vec2(wAng * 4.0 + uTime * 2.0,
+                                               wdr * 25.0 - uTime * 1.5)), 1.6);
+              vec3 discCol = mix(vec3(1.0, 0.55, 0.20),
+                                 vec3(0.55, 0.75, 1.20),
+                                 smoothstep(0.05, 0.22, wdr));
+              col += discCol * discMask * swirl * 1.8 * wOpen * fwdMask;
+              float arc = smoothstep(0.072, 0.060, wdr) * smoothstep(0.045, 0.058, wdr);
+              col += vec3(1.0, 0.85, 0.55) * arc * (0.6 + 0.4 * cos(wAng)) * wOpen * 1.2 * fwdMask;
+            }
           }
 
           // Tone-map.
