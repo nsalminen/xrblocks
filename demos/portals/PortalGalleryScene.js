@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as xb from 'xrblocks';
 
 import {CosmicImmersive} from './CosmicImmersive.js';
+import {CyberpunkImmersive} from './CyberpunkImmersive.js';
 import {ForestImmersive} from './ForestImmersive.js';
 import {LavaImmersive} from './LavaImmersive.js';
 import {Portal} from './Portal.js';
@@ -27,6 +28,7 @@ const IMMERSIVE_BY_NAME = {
   Forest: ForestImmersive,
   Underwater: UnderwaterImmersive,
   Volcano: LavaImmersive,
+  Cyberpunk: CyberpunkImmersive,
 };
 
 const ARC_RADIUS = 2.2; // distance from user to each portal (meters)
