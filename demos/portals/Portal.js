@@ -88,12 +88,11 @@ export class Portal extends THREE.Object3D {
 
     if (this._disc.material.uniforms) {
       this._disc.material.uniforms.uTime.value = this._t;
-      if (camera) {
-        camera.getWorldPosition(this._tmpVec);
-        this.worldToLocal(this._tmpVec);
-        this._disc.material.uniforms.uCamLocal.value.copy(this._tmpVec);
-      }
     }
+    // Note: uCamLocal is updated per-eye in the disc's onBeforeRender so XR
+    // gets correct stereo parallax inside the portal. The `camera` arg here
+    // (mono) would clobber that, so we deliberately don't write uCamLocal
+    // from update().
     if (this._ring.material.uniforms) {
       this._ring.material.uniforms.uTime.value = this._t;
     }
@@ -238,6 +237,16 @@ export class Portal extends THREE.Object3D {
     });
     this._disc = new THREE.Mesh(geom, mat);
     this._disc.renderOrder = 1;
+    // Per-eye stereo: three.js calls onBeforeRender once per camera, including
+    // each sub-camera of an XR ArrayCamera. Updating uCamLocal here means each
+    // eye gets its own ray origin and the world inside the disc has real
+    // parallax depth instead of looking flat.
+    const tmpEye = new THREE.Vector3();
+    this._disc.onBeforeRender = (renderer, sceneArg, camera) => {
+      camera.getWorldPosition(tmpEye);
+      this.worldToLocal(tmpEye);
+      mat.uniforms.uCamLocal.value.copy(tmpEye);
+    };
     this.add(this._disc);
   }
 
