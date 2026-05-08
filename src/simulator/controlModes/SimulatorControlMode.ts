@@ -154,6 +154,9 @@ export class SimulatorControlMode {
     if (gp.isButtonJustPressed(b.getBinding('toggleUI'))) {
       this.toggleUserInterface();
     }
+    if (gp.isButtonJustPressed(b.getBinding('toggleHand'))) {
+      this.hands.toggleHandedness();
+    }
     if (gp.isButtonJustPressed(b.getBinding('openSettings'))) {
       gp.onOpenSettings?.();
     }

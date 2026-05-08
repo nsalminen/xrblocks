@@ -181,6 +181,7 @@ export class SimulatorInterface {
       btnName(b.getBinding('cycleHandPoseRight'))]: 'Cycle Hand Pose',
       [btnName(b.getBinding('cycleSimulatorMode'))]: 'Cycle Simulator Mode',
       [btnName(b.getBinding('toggleUI'))]: 'Toggle UI',
+      [btnName(b.getBinding('toggleHand'))]: 'Swap Active Hand',
       [btnName(b.getBinding('openSettings'))]: 'Gamepad Settings',
     });
   }
