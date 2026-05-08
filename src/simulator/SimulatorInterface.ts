@@ -13,6 +13,7 @@ import {
 /** Minimal interface for the gamepad toast element. */
 interface GamepadToastElement extends HTMLElement {
   show(controls: Record<string, string>, duration?: number): void;
+  flash(message: string, duration?: number): void;
   dismiss(): void;
 }
 
@@ -70,6 +71,11 @@ export class SimulatorInterface {
     this.createModeIndicator(simulatorOptions, simulatorControls);
     this.showGeminiLivePanel(simulatorOptions);
     this.createHandPosePanel(simulatorOptions, simulatorHands);
+    simulatorHands.onHandednessChanged = (handedness) => {
+      this._ensureGamepadToast().flash(
+        `Active Hand: ${handedness === 'left' ? 'Left' : 'Right'}`
+      );
+    };
     this.showInstructions(simulatorOptions);
     if (input) this._initGamepadUI(input);
   }
@@ -161,15 +167,20 @@ export class SimulatorInterface {
     gp.onOpenSettings = () => this.toggleGamepadSettings(gp);
   }
 
-  showGamepadToast(gp: GamepadController) {
+  private _ensureGamepadToast(): GamepadToastElement {
     if (!this._gamepadToast) {
       this._gamepadToast = document.createElement(
         'xrblocks-gamepad-toast'
       ) as GamepadToastElement;
       document.body.appendChild(this._gamepadToast);
     }
+    return this._gamepadToast;
+  }
+
+  showGamepadToast(gp: GamepadController) {
+    const toast = this._ensureGamepadToast();
     const b = gp.bindings;
-    this._gamepadToast.show({
+    toast.show({
       'Left Stick': 'Move (or Hand in Controller mode)',
       'Right Stick': 'Look',
       [btnName(b.getBinding('moveDown')) +

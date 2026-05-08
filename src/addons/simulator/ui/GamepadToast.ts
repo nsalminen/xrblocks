@@ -86,8 +86,20 @@ export class GamepadToast extends LitElement {
   /** Map of button label → action description. */
   @property({type: Object}) controls: Record<string, string> = {};
 
+  @property({type: String}) private _flashMessage = '';
+
   show(controls: Record<string, string>, duration = 5000) {
     this.controls = controls;
+    this._flashMessage = '';
+    this.visible = true;
+    if (this._timer) clearTimeout(this._timer);
+    this._timer = setTimeout(() => this.dismiss(), duration);
+  }
+
+  /** Show a brief single-line message (e.g. "Active Hand: Right"). */
+  flash(message: string, duration = 1500) {
+    this._flashMessage = message;
+    this.controls = {};
     this.visible = true;
     if (this._timer) clearTimeout(this._timer);
     this._timer = setTimeout(() => this.dismiss(), duration);
@@ -102,6 +114,16 @@ export class GamepadToast extends LitElement {
   }
 
   render() {
+    if (this._flashMessage) {
+      return html`
+        <div
+          class="toast ${this.visible ? '' : 'hidden'}"
+          @click=${this.dismiss}
+        >
+          <span class="action">${this._flashMessage}</span>
+        </div>
+      `;
+    }
     return html`
       <div class="toast ${this.visible ? '' : 'hidden'}" @click=${this.dismiss}>
         <h3>🎮 Gamepad Connected</h3>
