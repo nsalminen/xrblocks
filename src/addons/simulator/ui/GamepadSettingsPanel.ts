@@ -243,10 +243,7 @@ export class GamepadSettingsPanel extends LitElement {
 
   private _moveFocus(delta: number) {
     const max = this._totalItems - 1;
-    this._focusedIndex = Math.max(
-      0,
-      Math.min(max, this._focusedIndex + delta)
-    );
+    this._focusedIndex = Math.max(0, Math.min(max, this._focusedIndex + delta));
   }
 
   private _activateFocused() {
