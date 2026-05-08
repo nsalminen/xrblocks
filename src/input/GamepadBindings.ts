@@ -38,9 +38,19 @@ export class GamepadBindings {
   }
 
   setBinding(action: GamepadAction, buttonIndex: number) {
-    // Auto-unbind any other action using this button.
+    // openSettings must always be bound so users can never lock themselves
+    // out of the menu — silently ignore attempts to rebind or unbind it,
+    // and refuse to assign its button to any other action.
+    if (action === 'openSettings') return;
+    if (buttonIndex === this.bindings.openSettings) return;
+    // Auto-unbind any other action using this button, except openSettings
+    // (same lock-out reason).
     for (const key of Object.keys(this.bindings) as GamepadAction[]) {
-      if (key !== action && this.bindings[key] === buttonIndex) {
+      if (
+        key !== action &&
+        key !== 'openSettings' &&
+        this.bindings[key] === buttonIndex
+      ) {
         this.bindings[key] = -1;
       }
     }

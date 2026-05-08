@@ -15,6 +15,12 @@ const ACTION_LABELS: Record<xb.GamepadAction, string> = {
   openSettings: 'Open Settings',
 };
 
+// Actions hidden from the rebind list. openSettings must always stay bound
+// so users can never lock themselves out of the menu.
+const REBINDABLE_ACTIONS = (
+  Object.keys(ACTION_LABELS) as xb.GamepadAction[]
+).filter((a) => a !== 'openSettings');
+
 @customElement('xrblocks-gamepad-settings')
 export class GamepadSettingsPanel extends LitElement {
   static styles = css`
@@ -174,7 +180,7 @@ export class GamepadSettingsPanel extends LitElement {
   }
 
   private get _totalItems(): number {
-    return Object.keys(ACTION_LABELS).length + 2; // bindings + reset + close
+    return REBINDABLE_ACTIONS.length + 2; // bindings + reset + close
   }
 
   show() {
@@ -260,6 +266,16 @@ export class GamepadSettingsPanel extends LitElement {
     if (this._navJustPressed(gp, 0)) this._activateFocused();
     // B button (button 1) — close panel.
     if (this._navJustPressed(gp, 1)) this.hide();
+    // Settings button (whichever is bound to openSettings) — also closes.
+    const settingsBtn = this.bindings?.getBinding('openSettings') ?? -1;
+    if (
+      settingsBtn >= 0 &&
+      settingsBtn !== 0 &&
+      settingsBtn !== 1 &&
+      this._navJustPressed(gp, settingsBtn)
+    ) {
+      this.hide();
+    }
 
     this._navUpdatePrev(gp);
   }
@@ -270,7 +286,7 @@ export class GamepadSettingsPanel extends LitElement {
   }
 
   private _activateFocused() {
-    const actions = Object.keys(ACTION_LABELS) as xb.GamepadAction[];
+    const actions = REBINDABLE_ACTIONS;
     if (this._focusedIndex < actions.length) {
       this._startListening(actions[this._focusedIndex]);
     } else if (this._focusedIndex === actions.length) {
@@ -307,7 +323,7 @@ export class GamepadSettingsPanel extends LitElement {
   }
 
   render() {
-    const actions = Object.keys(ACTION_LABELS) as xb.GamepadAction[];
+    const actions = REBINDABLE_ACTIONS;
     const resetIdx = actions.length;
     const closeIdx = actions.length + 1;
     return html`

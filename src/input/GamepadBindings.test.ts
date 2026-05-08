@@ -74,6 +74,19 @@ describe('GamepadBindings', () => {
     expect(bindings.getBinding('select')).toBe(0);
   });
 
+  it('refuses to rebind openSettings', () => {
+    const bindings = new GamepadBindings();
+    bindings.setBinding('openSettings', 0);
+    expect(bindings.getBinding('openSettings')).toBe(9);
+  });
+
+  it('does not unbind openSettings when another action steals its button', () => {
+    const bindings = new GamepadBindings();
+    bindings.setBinding('select', 9); // openSettings is on 9
+    expect(bindings.getBinding('select')).toBe(0); // refused, kept default
+    expect(bindings.getBinding('openSettings')).toBe(9);
+  });
+
   it('resetDefaults restores all to defaults and persists', () => {
     const bindings = new GamepadBindings();
     bindings.setBinding('select', 5);
