@@ -41,7 +41,9 @@ export class CosmicImmersive extends THREE.Object3D {
       mat.uniforms.uCamLocal.value.copy(camLocal);
 
       // Camera world quaternion → portal-local rotation for view directions.
-      const portalQuat = new THREE.Quaternion().setFromRotationMatrix(this._entryMatrix);
+      const portalQuat = new THREE.Quaternion().setFromRotationMatrix(
+        this._entryMatrix
+      );
       const portalQuatInv = portalQuat.clone().invert();
       const camQuat = camera.getWorldQuaternion(new THREE.Quaternion());
       const localQuat = portalQuatInv.multiply(camQuat);

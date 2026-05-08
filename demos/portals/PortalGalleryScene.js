@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as xb from 'xrblocks';
 
 import {CosmicImmersive} from './CosmicImmersive.js';
+import {ForestImmersive} from './ForestImmersive.js';
 import {Portal} from './Portal.js';
 import {CosmicScene} from './scenes/CosmicScene.js';
 import {CyberpunkScene} from './scenes/CyberpunkScene.js';
@@ -17,10 +18,16 @@ const SCENES = [
   CyberpunkScene,
 ];
 
+// Map scene name → walk-in immersive class. Scenes without an entry
+// behave as decorative portals only (no walk-in).
+const IMMERSIVE_BY_NAME = {
+  Cosmic: CosmicImmersive,
+  Forest: ForestImmersive,
+};
+
 const ARC_RADIUS = 2.2; // distance from user to each portal (meters)
 const ARC_SPAN = Math.PI * 0.85; // total arc span (~150°)
 
-const COSMIC_INDEX = 2; // CosmicScene is at index 2 in SCENES array.
 const ENTRY_THRESHOLD = 0.9; // Portal radius * factor for plane-crossing check.
 
 /**
@@ -37,9 +44,11 @@ const ENTRY_THRESHOLD = 0.9; // Portal radius * factor for plane-crossing check.
 export class PortalGalleryScene extends xb.Script {
   portals = [];
   labels = [];
+  immersives = []; // index → ImmersiveInstance | null
   clock = new THREE.Clock();
   _held = null;
-  _immersive = null;
+  _activeIndex = -1; // Portal index user has walked into, or -1.
+  _activeImmersive = null;
   _insidePortal = false;
   _prevCamLocalZ = 1.0; // Positive = in front of portal.
   _exitReady = false; // True once user is clearly behind portal after entry.
@@ -134,16 +143,25 @@ export class PortalGalleryScene extends xb.Script {
       side: THREE.BackSide,
     });
     this._fadeSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.5, 16, 16), fadeMat
+      new THREE.SphereGeometry(0.5, 16, 16),
+      fadeMat
     );
     this._fadeSphere.renderOrder = 9999;
     this._fadeSphere.frustumCulled = false;
     this._fadeSphere.raycast = () => {}; // Don't intercept clicks.
     this.add(this._fadeSphere);
 
-    // Immersive cosmic environment (hidden until walk-in).
-    this._immersive = new CosmicImmersive();
-    this.add(this._immersive);
+    // Immersive worlds (one per scene that supports walk-in).
+    for (let i = 0; i < SCENES.length; i++) {
+      const Cls = IMMERSIVE_BY_NAME[SCENES[i].name];
+      if (Cls) {
+        const inst = new Cls();
+        this.add(inst);
+        this.immersives.push(inst);
+      } else {
+        this.immersives.push(null);
+      }
+    }
   }
 
   onSelectStart(event) {
@@ -199,7 +217,11 @@ export class PortalGalleryScene extends xb.Script {
       const mat = this._fadeSphere.material;
       if (mat.opacity !== this._fadeTarget) {
         const speed = 26.0; // Fade speed (higher = faster).
-        mat.opacity = THREE.MathUtils.lerp(mat.opacity, this._fadeTarget, dt * speed);
+        mat.opacity = THREE.MathUtils.lerp(
+          mat.opacity,
+          this._fadeTarget,
+          dt * speed
+        );
         if (Math.abs(mat.opacity - this._fadeTarget) < 0.02) {
           mat.opacity = this._fadeTarget;
           if (this._fadeTarget === 1 && this._fadeCallback) {
@@ -213,32 +235,40 @@ export class PortalGalleryScene extends xb.Script {
 
     // Immersive mode: update sky sphere and check for exit.
     if (this._insidePortal) {
-      this._immersive.update(dt, cam);
+      this._activeImmersive.update(dt, cam);
       if (cam) {
         this._checkExit(cam);
         if (!this._insidePortal) return; // Exit just triggered, skip rest.
         // Billboard exit label toward camera.
-        const portal = this.portals[COSMIC_INDEX];
+        const portal = this.portals[this._activeIndex];
         this._exitLabel.position.set(
           portal.position.x,
           portal.position.y + Portal.RADIUS + 0.18,
           portal.position.z
         );
         this._exitLabel.lookAt(cam.position);
-        // Keep the cosmic portal's ring animating.
+        // Keep the active portal's ring animating.
         portal.update(dt, cam);
         // Real-time render of the room into exit portal (parallax as user moves).
-        this._captureExitSnapshot(cam);
+        this._captureExitSnapshot(cam, portal);
       }
       return;
     }
 
     for (const p of this.portals) p.update(dt, cam);
 
-    // Continuously update exit snapshot with current camera view.
-    if (cam) this._captureExitSnapshot(cam);
+    // Continuously update exit snapshot for any portal that supports walk-in.
+    // (Picks the closest walk-in portal so its disc shows live room view.)
+    if (cam) {
+      for (let i = 0; i < this.portals.length; i++) {
+        if (this.immersives[i]) {
+          this._captureExitSnapshot(cam, this.portals[i]);
+          break;
+        }
+      }
+    }
 
-    // Check if user walks through the cosmic portal.
+    // Check if user walks through any walk-in capable portal.
     if (cam) {
       this._checkEntry(cam);
     }
@@ -258,25 +288,32 @@ export class PortalGalleryScene extends xb.Script {
 
   _checkEntry(cam) {
     if (this._fadeTarget === 1) return; // Fade in progress.
-    const portal = this.portals[COSMIC_INDEX];
-    // Camera position in portal's local space.
     const camWorld = cam.getWorldPosition(new THREE.Vector3());
-    const local = portal.worldToLocal(camWorld.clone());
 
-    const radialDist = Math.hypot(local.x, local.y);
-    const curZ = local.z;
+    // Check each walk-in capable portal. First crossing wins.
+    for (let i = 0; i < this.portals.length; i++) {
+      if (!this.immersives[i]) continue;
+      const portal = this.portals[i];
+      const local = portal.worldToLocal(camWorld.clone());
+      const radialDist = Math.hypot(local.x, local.y);
+      const curZ = local.z;
+      const prevZ = portal._prevCamLocalZ ?? 1.0;
 
-    // Crossed from front (z>0) to behind (z<=0) while within disc radius.
-    if (this._prevCamLocalZ > 0 && curZ <= 0 &&
-        radialDist < Portal.RADIUS * ENTRY_THRESHOLD) {
-      this._enterImmersive(portal);
+      if (
+        prevZ > 0 &&
+        curZ <= 0 &&
+        radialDist < Portal.RADIUS * ENTRY_THRESHOLD
+      ) {
+        portal._prevCamLocalZ = curZ;
+        this._enterImmersive(portal, i);
+        return;
+      }
+      portal._prevCamLocalZ = curZ;
     }
-
-    this._prevCamLocalZ = curZ;
   }
 
   _checkExit(cam) {
-    const portal = this.portals[COSMIC_INDEX];
+    const portal = this.portals[this._activeIndex];
     const camWorld = cam.getWorldPosition(new THREE.Vector3());
     const local = portal.worldToLocal(camWorld.clone());
 
@@ -291,24 +328,29 @@ export class PortalGalleryScene extends xb.Script {
     }
 
     // Crossed back from behind (z<0) to front (z>=0) within a generous radius.
-    if (this._prevCamLocalZ < 0 && curZ >= 0 &&
-        radialDist < Portal.RADIUS * 1.5) {
+    if (
+      this._prevCamLocalZ < 0 &&
+      curZ >= 0 &&
+      radialDist < Portal.RADIUS * 1.5
+    ) {
       this._exitImmersive();
     }
 
     this._prevCamLocalZ = curZ;
   }
 
-  _enterImmersive(portal) {
+  _enterImmersive(portal, index) {
     // Fade to white, then switch to immersive, then fade back.
     this._fadeTarget = 1;
     this._fadeCallback = () => {
       this._insidePortal = true;
-      this._immersive.show(portal.matrixWorld);
+      this._activeIndex = index;
+      this._activeImmersive = this.immersives[index];
+      this._activeImmersive.show(portal.matrixWorld);
       this._exitReady = false;
       this._prevCamLocalZ = -1;
 
-      // Swap cosmic disc to show the room render target.
+      // Swap active portal's disc to show the room render target.
       this._origDiscMat = portal._disc.material;
       portal._disc.material = this._exitMat;
       portal._disc.visible = true;
@@ -316,7 +358,7 @@ export class PortalGalleryScene extends xb.Script {
 
       // Hide other portals and all labels.
       for (let i = 0; i < this.portals.length; i++) {
-        if (i !== COSMIC_INDEX) {
+        if (i !== index) {
           this.portals[i].visible = false;
         }
         this.labels[i].visible = false;
@@ -330,12 +372,16 @@ export class PortalGalleryScene extends xb.Script {
     this._fadeTarget = 1;
     this._fadeCallback = () => {
       this._insidePortal = false;
-      this._immersive.hide();
+      this._activeImmersive.hide();
       this._exitLabel.visible = false;
 
       // Restore original disc material and render order.
-      this.portals[COSMIC_INDEX]._disc.material = this._origDiscMat;
-      this.portals[COSMIC_INDEX]._disc.renderOrder = 0;
+      const portal = this.portals[this._activeIndex];
+      portal._disc.material = this._origDiscMat;
+      portal._disc.renderOrder = 0;
+
+      this._activeIndex = -1;
+      this._activeImmersive = null;
 
       // Show gallery.
       for (const p of this.portals) p.visible = true;
@@ -344,21 +390,24 @@ export class PortalGalleryScene extends xb.Script {
   }
 
   /** Render the simulator room into the exit portal texture with dampened parallax. */
-  _captureExitSnapshot(cam) {
+  _captureExitSnapshot(cam, portal) {
     const renderer = xb.core.renderer;
     if (!renderer) return;
 
     const simScene = xb.core.simulator?.simulatorScene;
     if (!simScene) return;
 
-    const portal = this.portals[COSMIC_INDEX];
     const portalPos = portal.getWorldPosition(new THREE.Vector3());
     const camPos = cam.getWorldPosition(new THREE.Vector3());
 
     // Place exit camera in front of portal (room side), offset slightly by user movement.
     // Portal local +Z points toward room center, so step forward from portal.
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(portal.quaternion);
-    const roomCamBase = portalPos.clone().add(forward.clone().multiplyScalar(0.3));
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(
+      portal.quaternion
+    );
+    const roomCamBase = portalPos
+      .clone()
+      .add(forward.clone().multiplyScalar(0.3));
 
     const PARALLAX_FACTOR = 0.15;
     this._exitCam.position.set(
