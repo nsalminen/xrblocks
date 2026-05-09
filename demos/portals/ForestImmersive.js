@@ -429,31 +429,31 @@ export class ForestImmersive extends THREE.Object3D {
               vec2 owlC = vec2(owlBaseX, owlBaseY);
               vec2 owlD = p - owlC;
               // Body silhouette
-              float owlBody = smoothstep(0.10, 0.085, length(owlD * vec2(1.4, 1.0)));
+              float owlBody = smoothstep(0.025, 0.020, length(owlD * vec2(1.4, 1.0)));
               // Wings: two flapping arcs
               float owlFlap = sin(uTime * 6.0 + owlK * 2.0);
               for (int s = -1; s <= 1; s += 2) {
                 float fs = float(s);
-                vec2 wc = owlC + vec2(fs * 0.18, 0.0);
+                vec2 wc = owlC + vec2(fs * 0.05, 0.0);
                 vec2 wd = p - wc;
                 float wAng = fs * (0.6 + owlFlap * 0.5);
                 float wx = wd.x * cos(wAng) - wd.y * sin(wAng);
                 float wy = wd.x * sin(wAng) + wd.y * cos(wAng);
-                float wing = smoothstep(0.18, 0.14, abs(wy))
-                           * smoothstep(0.25, 0.0, wx * fs)
+                float wing = smoothstep(0.05, 0.04, abs(wy))
+                           * smoothstep(0.07, 0.0, wx * fs)
                            * step(0.0, wx * fs);
                 owlBody = max(owlBody, wing);
               }
               // Faint warm halo so the dark silhouette reads against night sky.
-              float owlHalo = smoothstep(0.32, 0.10,
+              float owlHalo = smoothstep(0.08, 0.025,
                   length(owlD * vec2(1.2, 1.0)));
-              col += vec3(0.25, 0.20, 0.12) * owlHalo * owlLife * fwdMask * 0.18;
+              col += vec3(0.25, 0.20, 0.12) * owlHalo * owlLife * fwdMask * 0.25;
               col = mix(col, vec3(0.04, 0.04, 0.05), owlBody * owlLife * fwdMask);
               // Eye glints
-              float owlEye = smoothstep(0.018, 0.0,
-                  length(p - owlC - vec2(0.045, 0.020)))
-                + smoothstep(0.018, 0.0,
-                  length(p - owlC - vec2(-0.045, 0.020)));
+              float owlEye = smoothstep(0.005, 0.0,
+                  length(p - owlC - vec2(0.012, 0.005)))
+                + smoothstep(0.005, 0.0,
+                  length(p - owlC - vec2(-0.012, 0.005)));
               col += vec3(1.0, 0.85, 0.20) * owlEye * owlLife * 1.5 * fwdMask;
             }
           }
