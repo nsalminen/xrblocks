@@ -68,6 +68,11 @@ export class PortalGalleryScene extends xb.Script {
   _fadeTarget = 0; // Target opacity (0 = transparent, 1 = opaque).
   _fadeCallback = null; // Called when fade reaches 1.0 (fully opaque).
   _transitionCooldownUntil = 0; // performance.now() timestamp; before this, no transitions fire.
+  _exitFrameTick = 0; // Counter to throttle exit-snapshot RT renders.
+  _tmpV1 = new THREE.Vector3();
+  _tmpV2 = new THREE.Vector3();
+  _tmpV3 = new THREE.Vector3();
+  _tmpV4 = new THREE.Vector3();
 
   init() {
     const userY = xb.user?.height ?? 1.6;
@@ -136,7 +141,7 @@ export class PortalGalleryScene extends xb.Script {
     this.add(this._exitLabel);
 
     // Render target for exit portal view (shows the room the user came from).
-    this._exitRT = new THREE.WebGLRenderTarget(512, 512);
+    this._exitRT = new THREE.WebGLRenderTarget(256, 256);
     this._exitMat = new THREE.MeshBasicMaterial({
       map: this._exitRT.texture,
       side: THREE.DoubleSide,
@@ -290,7 +295,7 @@ export class PortalGalleryScene extends xb.Script {
   _checkEntry(cam) {
     if (this._fadeTarget === 1) return; // Fade in progress.
     if (performance.now() < this._transitionCooldownUntil) return;
-    const camWorld = cam.getWorldPosition(new THREE.Vector3());
+    const camWorld = cam.getWorldPosition(this._tmpV1);
 
     // Check each walk-in capable portal. First crossing wins.
     // Crossing in EITHER direction triggers entry; fromSide tells the
@@ -299,7 +304,7 @@ export class PortalGalleryScene extends xb.Script {
     for (let i = 0; i < this.portals.length; i++) {
       if (!this.immersives[i]) continue;
       const portal = this.portals[i];
-      const local = portal.worldToLocal(camWorld.clone());
+      const local = portal.worldToLocal(this._tmpV2.copy(camWorld));
       const radialDist = Math.hypot(local.x, local.y);
       const curZ = local.z;
       const prevZ = portal._prevCamLocalZ ?? curZ;
@@ -322,8 +327,8 @@ export class PortalGalleryScene extends xb.Script {
   _checkExit(cam) {
     if (performance.now() < this._transitionCooldownUntil) return;
     const portal = this.portals[this._activeIndex];
-    const camWorld = cam.getWorldPosition(new THREE.Vector3());
-    const local = portal.worldToLocal(camWorld.clone());
+    const camWorld = cam.getWorldPosition(this._tmpV1);
+    const local = portal.worldToLocal(this._tmpV2.copy(camWorld));
 
     const radialDist = Math.hypot(local.x, local.y);
     const curZ = local.z;
@@ -410,23 +415,26 @@ export class PortalGalleryScene extends xb.Script {
 
   /** Render the simulator room into the exit portal texture with dampened parallax. */
   _captureExitSnapshot(cam, portal) {
+    // Throttle to every other frame — the room behind the user is mostly
+    // static so a half-rate update is visually indistinguishable.
+    this._exitFrameTick = (this._exitFrameTick + 1) % 2;
+    if (this._exitFrameTick !== 0) return;
+
     const renderer = xb.core.renderer;
     if (!renderer) return;
 
     const simScene = xb.core.simulator?.simulatorScene;
     if (!simScene) return;
 
-    const portalPos = portal.getWorldPosition(new THREE.Vector3());
-    const camPos = cam.getWorldPosition(new THREE.Vector3());
+    const portalPos = portal.getWorldPosition(this._tmpV1);
+    const camPos = cam.getWorldPosition(this._tmpV2);
 
     // Place exit camera in front of portal (room side), offset slightly by user movement.
     // Portal local +Z points toward room center, so step forward from portal.
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(
-      portal.quaternion
-    );
-    const roomCamBase = portalPos
-      .clone()
-      .add(forward.clone().multiplyScalar(0.3));
+    const forward = this._tmpV3.set(0, 0, 1).applyQuaternion(portal.quaternion);
+    const roomCamBase = this._tmpV4
+      .copy(portalPos)
+      .addScaledVector(forward, 0.3);
 
     const PARALLAX_FACTOR = 0.15;
     this._exitCam.position.set(
@@ -435,7 +443,11 @@ export class PortalGalleryScene extends xb.Script {
       roomCamBase.z
     );
     // Look in the same direction (deeper into room).
-    this._exitCam.lookAt(this._exitCam.position.clone().add(forward));
+    this._exitCam.lookAt(
+      this._exitCam.position.x + forward.x,
+      this._exitCam.position.y + forward.y,
+      this._exitCam.position.z + forward.z
+    );
 
     const oldRT = renderer.getRenderTarget();
     renderer.setRenderTarget(this._exitRT);
