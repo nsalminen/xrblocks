@@ -236,18 +236,8 @@ export class CosmicImmersive extends THREE.Object3D {
             mc *= 0.15 + mDensity * 2.4;
             col = mix(col, mc, clamp(mDensity * 0.7, 0.0, 1.0));
           }
-          // Far layer (depth 5.0) — distant haze
-          {
-            vec3 nDir = rd * 5.0;
-            float fn1 = fbm3(nDir * 1.2 + vec3(uTime * 0.02, -uTime * 0.015, uTime * 0.01));
-            float fn3 = ridgedFbm3(nDir * 3.0 + vec3(-uTime * 0.03, uTime * 0.02, uTime * 0.015));
-            float fDensity = pow(fn1, 1.8);
-            float fWisps = pow(fn3, 2.2);
-            vec3 fc = mix(nebulaA, nebulaB, smoothstep(0.2, 0.75, fn1));
-            fc = mix(fc, nebulaD, fWisps * 0.5);
-            fc *= 0.1 + fDensity * 1.8;
-            col = mix(col, fc, clamp(fDensity * 0.4, 0.0, 1.0));
-          }
+          // Far layer removed — near + mid give enough volume and the
+          // 3rd noise pass was the heaviest perf hit in this shader.
           col = mix(vec3(0.005, 0.005, 0.02), col, 0.92);
 
           // ---- Stars (octahedral mapping, no seam) ----

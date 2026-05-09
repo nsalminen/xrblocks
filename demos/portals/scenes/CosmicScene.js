@@ -346,18 +346,7 @@ export const CosmicScene = {
       mc *= 0.15 + density * 2.4;
       col = mix(col, mc, clamp(density * 0.7, 0.0, 1.0));
     }
-    // Far depth layer — distant haze
-    {
-      vec2 nuv = nUv * 1.8;
-      float fn1 = fbm(nuv * 1.2 + vec2(uTime * 0.02, -uTime * 0.015));
-      float fn3 = ridgedFbm(nuv * 3.0 + vec2(-uTime * 0.03, uTime * 0.02));
-      float fDensity = pow(fn1, 1.8);
-      float fWisps = pow(fn3, 2.2);
-      vec3 fc = mix(nebulaA, nebulaB, smoothstep(0.2, 0.75, fn1));
-      fc = mix(fc, nebulaD, fWisps * 0.5);
-      fc *= 0.1 + fDensity * 1.8;
-      col = mix(col, fc, clamp(fDensity * 0.4, 0.0, 1.0));
-    }
+    // Far depth layer removed for perf — see CosmicImmersive.js comment.
     col = mix(vec3(0.005, 0.005, 0.02), col, 0.92);
 
     vec4 sceneRgba = cosmicRaymarch(p, uTime);
